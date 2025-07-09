@@ -1,16 +1,4 @@
-/**
- * ==============================================================================
- * PAHANA EDU - HOMEPAGE JAVASCRIPT
- * ==============================================================================
- * Interactive functionality for the homepage including:
- * - Header scroll effects
- * - Smooth scrolling navigation
- * - Scroll animations
- * - Mobile menu toggle
- * - Counter animations
- * - Interactive hover effects
- * ==============================================================================
- */
+
 
 // ==============================================================================
 // DOCUMENT READY STATE
