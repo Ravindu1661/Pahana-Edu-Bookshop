@@ -1,4 +1,4 @@
-// LOGIN.JS - Pahana Edu Customer Portal Interactive Functions
+// LOGIN.JS - 
 
 // Global Variables
 let currentForm = 'login';
