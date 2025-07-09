@@ -44,5 +44,6 @@
     <!-- External JS File -->
     <script src="assets/js/Admin/admin-dashboard.js"></script>
     <script src="assets/js/Admin/admin-Manage-Users.js"></script>
+    <script src="assets/js/Admin/admin-Manage-Item.js"></script>
 </body>
 </html>
