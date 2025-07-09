@@ -1,4 +1,4 @@
-// LOGIN.JS - 
+//login-signup-js 
 
 // Global Variables
 let currentForm = 'login';

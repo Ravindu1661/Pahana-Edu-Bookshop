@@ -177,25 +177,36 @@ public class AdminController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            int adminCount = userDAO.getUserCountByRole(User.ROLE_ADMIN);
+        	int adminCount = userDAO.getUserCountByRole(User.ROLE_ADMIN);
             int managerCount = userDAO.getUserCountByRole(User.ROLE_MANAGER);
+            int cashierCount = userDAO.getUserCountByRole(User.ROLE_CASHIER);  // මෙය අමතක වෙලා තිබුණා
             int customerCount = userDAO.getUserCountByRole(User.ROLE_CUSTOMER);
-            int totalUsers = adminCount + managerCount + customerCount;
+            int totalUsers = adminCount + managerCount + cashierCount + customerCount;
+            
+            // Debug logging
+            System.out.println("AdminController: User Stats Debug:");
+            System.out.println("  Admin Count: " + adminCount);
+            System.out.println("  Manager Count: " + managerCount);
+            System.out.println("  Cashier Count: " + cashierCount);
+            System.out.println("  Customer Count: " + customerCount);
+            System.out.println("  Total Users: " + totalUsers);
             
             String jsonResponse = String.format(
                 "{\"success\": true, \"stats\": {" +
                 "\"totalUsers\": %d, " +
                 "\"adminCount\": %d, " +
                 "\"managerCount\": %d, " +
+                "\"cashierCount\": %d, " +
                 "\"customerCount\": %d" +
                 "}}",
-                totalUsers, adminCount, managerCount, customerCount
+                totalUsers, adminCount, managerCount, cashierCount, customerCount
             );
             
             out.print(jsonResponse);
             
         } catch (Exception e) {
             System.err.println("AdminController: Error getting user stats - " + e.getMessage());
+            e.printStackTrace();
             out.print("{\"success\": false, \"message\": \"Error retrieving statistics\"}");
         } finally {
             out.close();
@@ -281,7 +292,9 @@ public class AdminController extends HttpServlet {
             String lastName = request.getParameter("lastName");
             String email = request.getParameter("email");
             String phone = request.getParameter("phone");
+            String role = request.getParameter("role");
             String status = request.getParameter("status");
+            String password = request.getParameter("password");
             
             if (userIdStr == null || userIdStr.trim().isEmpty()) {
                 sendErrorResponse(response, "User ID is required");
@@ -297,6 +310,15 @@ public class AdminController extends HttpServlet {
                 return;
             }
             
+            // Basic validation for required fields
+            if (firstName == null || firstName.trim().isEmpty() ||
+                lastName == null || lastName.trim().isEmpty() ||
+                email == null || email.trim().isEmpty()) {
+                
+                sendErrorResponse(response, "First name, last name, and email are required");
+                return;
+            }
+            
             // Check if email is being changed and if it already exists
             if (email != null && !email.equals(existingUser.getEmail())) {
                 if (userDAO.emailExistsExcluding(email, userId)) {
@@ -306,11 +328,33 @@ public class AdminController extends HttpServlet {
             }
             
             // Update user object
-            if (firstName != null) existingUser.setFirstName(firstName.trim());
-            if (lastName != null) existingUser.setLastName(lastName.trim());
-            if (email != null) existingUser.setEmail(email.trim());
-            if (phone != null) existingUser.setPhone(phone.trim());
-            if (status != null) existingUser.setStatus(status.trim());
+            existingUser.setFirstName(firstName.trim());
+            existingUser.setLastName(lastName.trim());
+            existingUser.setEmail(email.trim());
+            
+            if (phone != null) {
+                existingUser.setPhone(phone.trim());
+            }
+            
+            if (status != null && !status.trim().isEmpty()) {
+                existingUser.setStatus(status.trim());
+            }
+            
+            // Handle role update - only if role is provided
+            if (role != null && !role.trim().isEmpty()) {
+                existingUser.setRole(role.trim());
+            }
+            // Note: If role is null or empty, keep the existing role
+            
+            // Handle password update if provided
+            if (password != null && !password.trim().isEmpty()) {
+                if (userDAO.updatePassword(existingUser.getEmail(), password)) {
+                    System.out.println("AdminController: Password updated for user - " + existingUser.getEmail());
+                } else {
+                    sendErrorResponse(response, "Failed to update password");
+                    return;
+                }
+            }
             
             // Update user
             if (userDAO.updateUser(existingUser)) {
@@ -323,12 +367,12 @@ public class AdminController extends HttpServlet {
             sendErrorResponse(response, "Invalid user ID");
         } catch (Exception e) {
             System.err.println("AdminController: Error updating user - " + e.getMessage());
+            e.printStackTrace();
             sendErrorResponse(response, "Error updating user");
         } finally {
             out.close();
         }
     }
-    
     /**
      * Handle delete user request
      */

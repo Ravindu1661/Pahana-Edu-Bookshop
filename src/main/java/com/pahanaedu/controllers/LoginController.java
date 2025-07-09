@@ -170,7 +170,7 @@ public class LoginController extends HttpServlet {
         
         // Send success response
         sendSuccessResponse(response, out, "Admin login successful!", 
-                           User.ROLE_ADMIN, "admin-dashboard.jsp");
+                           User.ROLE_ADMIN, "Admin/admin-dashboard.jsp");
     }
     
     /**
