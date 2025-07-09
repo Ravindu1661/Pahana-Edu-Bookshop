@@ -1,4 +1,4 @@
-// Admin Item Management - Professional Version
+// Admin Item Management 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📦 Item Management loaded');
     
@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let deleteItem = null;
     let editCategory = null;
     let deleteCategory = null;
+    let currentImageData = null; // Store base64 image data
     
     // Initialize when page loads
     setTimeout(initItemManagement, 100);
@@ -114,8 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
 	   }
 	   
 	   tbody.innerHTML = items.map(item => {
-	       // Use uploaded image if available, otherwise use default image
-	       const imageUrl = (item.imagePath && item.imagePath.trim() !== '') ? item.imagePath : defaultImage;
+	       // Use uploaded image if available, check if it's base64 or URL
+	       let imageUrl = defaultImage;
+	       if (item.imagePath && item.imagePath.trim() !== '') {
+	           // Check if it's base64 data
+	           if (item.imagePath.startsWith('data:image/')) {
+	               imageUrl = item.imagePath;
+	           } else {
+	               imageUrl = item.imagePath;
+	           }
+	       }
+	       
 	       const priceDisplay = item.offerPrice ? 
 	           `<div class="price-display">
 	               <span class="original-price">Rs. ${item.price}</span>
@@ -265,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openAddItemModal() {
         console.log('➕ Opening add item modal');
         editItem = null;
+        currentImageData = null;
         
         const modal = document.getElementById('itemModal');
         const form = document.getElementById('itemForm');
@@ -278,6 +289,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Hide reference number field
             hideReferenceField();
             
+            // Clear image preview
+            const preview = document.getElementById('imagePreview');
+            if (preview) preview.style.display = 'none';
+            
             modal.style.display = 'block';
             document.getElementById('title')?.focus();
         }
@@ -287,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('itemModal');
         if (modal) modal.style.display = 'none';
         editItem = null;
+        currentImageData = null;
     }
     
     function hideReferenceField() {
@@ -321,6 +337,19 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('isEdit').value = 'true';
             modalTitle.textContent = 'Edit Item';
             
+            // Set current image data
+            currentImageData = editItem.imagePath;
+            
+            // Show existing image if available
+            if (editItem.imagePath && editItem.imagePath.trim() !== '') {
+                const preview = document.getElementById('imagePreview');
+                const img = document.getElementById('previewImg');
+                if (preview && img) {
+                    img.src = editItem.imagePath;
+                    preview.style.display = 'block';
+                }
+            }
+            
             // Hide reference field
             hideReferenceField();
             
@@ -347,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.style.display = 'block';
     }
     
-    // Handle item form submission
+    // Handle item form submission - UPDATED TO HANDLE BASE64 IMAGES
     function handleItemFormSubmit(e) {
         e.preventDefault();
         console.log('📝 Submitting item form');
@@ -360,6 +389,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 data[key] = value.trim();
             }
         }
+        
+        // Add image data to form data
+        data.imagePath = currentImageData || '';
         
         // Validation
         if (!data.title || !data.author || !data.categoryId || !data.price || !data.stock) {
@@ -617,20 +649,48 @@ document.addEventListener('DOMContentLoaded', () => {
         loadItems();
     }
     
-    // Utility functions
+    // Utility functions - UPDATED IMAGE PREVIEW TO HANDLE BASE64
     function previewImage(input) {
         if (input.files && input.files[0]) {
+            const file = input.files[0];
+            
+            // Validate file size (max 5MB for base64)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Image size should be less than 5MB', 'error');
+                input.value = '';
+                return;
+            }
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                showToast('Please select a valid image file', 'error');
+                input.value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
                 const preview = document.getElementById('imagePreview');
                 const img = document.getElementById('previewImg');
                 
                 if (img && preview) {
+                    // Store base64 data
+                    currentImageData = e.target.result;
+                    
+                    // Show preview
                     img.src = e.target.result;
                     preview.style.display = 'block';
+                    
+                    console.log('✅ Image converted to base64 successfully');
                 }
             };
-            reader.readAsDataURL(input.files[0]);
+            
+            reader.onerror = function() {
+                showToast('Error reading image file', 'error');
+                input.value = '';
+            };
+            
+            reader.readAsDataURL(file);
         }
     }
     
@@ -642,6 +702,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (upload) upload.value = '';
         if (preview) preview.style.display = 'none';
         if (img) img.src = '';
+        
+        // Clear image data
+        currentImageData = null;
     }
     
     function showToast(message, type = 'info') {
