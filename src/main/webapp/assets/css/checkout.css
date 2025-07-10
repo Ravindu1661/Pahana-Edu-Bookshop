@@ -490,3 +490,175 @@
         flex-direction: column;
     }
 }
+
+
+        /* Card Details Form Styles */
+        .card-details-form {
+            margin-top: 20px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            animation: slideDown 0.3s ease-out;
+            display: none;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card-details-form h4 {
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.1rem;
+        }
+
+        .card-details-form h4 i {
+            color: #27ae60;
+        }
+
+        .card-form-grid {
+            display: grid;
+            gap: 15px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 15px;
+        }
+
+        .card-details-form .form-group {
+            margin-bottom: 0;
+            position: relative;
+        }
+
+        .card-details-form input {
+            background: white;
+            border: 1px solid #ddd;
+            transition: all 0.3s ease;
+            padding: 12px;
+            border-radius: 6px;
+            width: 100%;
+            font-size: 0.95rem;
+        }
+
+        .card-details-form input:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+            background: #fff;
+            outline: none;
+        }
+
+        .card-details-form input.error {
+            border-color: #e74c3c;
+            box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+        }
+
+        .payment-security {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e8;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #27ae60;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .payment-security i {
+            color: #27ae60;
+        }
+
+        /* Payment Method Selection Enhancement */
+        .payment-option input[type="radio"]:checked + label {
+            background: #e8f4fd;
+            border-color: #3498db;
+        }
+
+        .payment-option input[type="radio"]:checked + label .payment-info i {
+            color: #2980b9;
+        }
+
+        /* Loading state for place order button */
+        .btn.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .btn.loading::after {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Card input formatting */
+        #cardNumber {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        #expiryDate,
+        #cvv {
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Mobile responsive for card form */
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .card-details-form {
+                padding: 20px 15px;
+            }
+        }
+
+        /* Validation styles */
+        .form-group.valid input {
+            border-color: #27ae60;
+        }
+
+        .form-group.invalid input {
+            border-color: #e74c3c;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 0.8rem;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .form-group.invalid .error-message {
+            display: block;
+        }

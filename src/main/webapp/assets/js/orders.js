@@ -1,13 +1,10 @@
-// Simple Debug Version - orders.js
+// Fixed Orders JavaScript
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📦 Orders page loaded');
     
     // Get base URL
     const contextPath = window.location.pathname.split('/')[1];
     const baseUrl = '/' + contextPath;
-    
-    console.log('🔍 Base URL:', baseUrl);
-    console.log('🔍 Full URL:', window.location.href);
     
     // Global variables
     let allOrders = [];
@@ -19,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initOrdersPage();
     
     function initOrdersPage() {
-        console.log('🔧 Initializing orders page...');
         setupEventListeners();
         loadUserOrders();
     }
@@ -28,21 +24,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadUserOrders() {
         console.log('📋 Loading user orders...');
         const apiUrl = `${baseUrl}/customer/orders`;
-        console.log('📡 API URL:', apiUrl);
         
         showLoading();
         
         fetch(apiUrl)
-        .then(response => {
-            console.log('📡 Response Status:', response.status);
-            console.log('📡 Response OK:', response.ok);
-            
-            return response.text(); // Get text first to see raw response
-        })
+        .then(response => response.text())
         .then(text => {
             console.log('📊 Raw Response:', text);
             
-            // Try to parse as JSON
             try {
                 const data = JSON.parse(text);
                 console.log('📊 Parsed JSON:', data);
@@ -51,18 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (data.success && data.orders) {
                     allOrders = data.orders;
-                    console.log(`✅ ${allOrders.length} orders loaded from database`);
-                    if (allOrders.length > 0) {
-                        console.log('📋 First order:', allOrders[0]);
-                    }
+                    console.log(`✅ ${allOrders.length} orders loaded`);
                     applyFilters();
                 } else {
-                    console.log('📭 No orders found or API failed');
+                    console.log('📭 No orders found');
                     showEmptyState();
                 }
             } catch (e) {
                 console.error('❌ JSON Parse Error:', e);
-                console.log('Raw text was:', text);
                 hideLoading();
                 showEmptyState();
             }
@@ -82,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 currentFilter = e.target.dataset.status;
-                console.log('🔽 Filter changed to:', currentFilter);
                 applyFilters();
             });
         });
@@ -92,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 searchQuery = e.target.value.toLowerCase();
-                console.log('🔍 Search query:', searchQuery);
                 applyFilters();
             });
         }
@@ -120,11 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Apply filters and search
     function applyFilters() {
-        console.log('🔄 Applying filters...');
-        console.log('Current Filter:', currentFilter);
-        console.log('Search Query:', searchQuery);
-        console.log('All Orders:', allOrders.length);
-        
         filteredOrders = allOrders.filter(order => {
             const matchesFilter = currentFilter === 'all' || order.status === currentFilter;
             const matchesSearch = searchQuery === '' || 
@@ -137,29 +115,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return matchesFilter && matchesSearch;
         });
         
-        console.log('Filtered Orders:', filteredOrders.length);
         displayOrders();
     }
     
     // Display orders
     function displayOrders() {
-        console.log('🖥️ Displaying orders...');
         const ordersList = document.getElementById('ordersList');
         const emptyState = document.getElementById('emptyState');
         
-        if (!ordersList) {
-            console.error('❌ ordersList element not found');
-            return;
-        }
+        if (!ordersList) return;
         
         if (filteredOrders.length === 0) {
-            console.log('📭 No orders to display');
             ordersList.style.display = 'none';
             if (emptyState) emptyState.style.display = 'block';
             return;
         }
         
-        console.log(`📋 Displaying ${filteredOrders.length} orders`);
         ordersList.style.display = 'grid';
         if (emptyState) emptyState.style.display = 'none';
         
@@ -232,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function viewOrderDetails(orderId) {
         const order = allOrders.find(o => o.id === orderId);
         if (!order) {
-            showToast('❌ Order not found', 'error');
+            showToast('Order not found', 'error');
             return;
         }
         
@@ -244,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!modalBody) return;
         
         modalBody.innerHTML = `
-            <div class="order-details">
+            <div class="order-details print-content">
                 <div class="detail-section">
                     <h4><i class="fas fa-info-circle"></i> Order Information</h4>
                     <div class="detail-row">
@@ -349,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             hideLoading();
             if (data.success) {
-                showToast('✅ Order cancelled successfully', 'success');
+                showToast('Order cancelled successfully', 'success');
                 // Update order status in local data
                 const order = allOrders.find(o => o.id === orderId);
                 if (order) {
@@ -357,31 +328,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     applyFilters();
                 }
             } else {
-                showToast('❌ ' + (data.message || 'Failed to cancel order'), 'error');
+                showToast(data.message || 'Failed to cancel order', 'error');
             }
         })
         .catch(error => {
             hideLoading();
-            console.error('❌ Cancel order error:', error);
-            showToast('❌ Failed to cancel order. Please try again.', 'error');
+            console.error('Cancel order error:', error);
+            showToast('Failed to cancel order. Please try again.', 'error');
         });
     }
     
     // Reorder items
     function reorderItems(orderId) {
-        showToast('🛒 Reorder feature coming soon...', 'info');
+        showToast('Reorder feature coming soon...', 'info');
     }
     
     // Download invoice
     function downloadInvoice(orderId) {
         const order = allOrders.find(o => o.id === orderId);
         if (!order) {
-            showToast('❌ Order not found', 'error');
+            showToast('Order not found', 'error');
             return;
         }
         
         generateInvoice(order);
-        showToast('✅ Invoice downloaded successfully', 'success');
+        showToast('Invoice downloaded successfully', 'success');
     }
     
     // Generate invoice
@@ -479,6 +450,158 @@ document.addEventListener('DOMContentLoaded', () => {
         window.URL.revokeObjectURL(url);
     }
     
+    // Print order details - FIXED
+    function printOrderDetails() {
+        const printContent = document.querySelector('.print-content');
+        if (!printContent) {
+            showToast('No content to print', 'error');
+            return;
+        }
+        
+        const originalContent = document.body.innerHTML;
+        const printHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Order Details</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .detail-section { margin-bottom: 20px; }
+                    .detail-section h4 { color: #333; margin-bottom: 10px; }
+                    .detail-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                    .items-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    .items-table th, .items-table td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+                    .items-table th { background: #f8f9fa; }
+                    .items-table img { width: 30px; height: 38px; }
+                    .order-status { padding: 3px 8px; border-radius: 10px; font-size: 0.8em; }
+                    .status-pending { background: #fff3cd; color: #856404; }
+                    .status-confirmed { background: #cce5ff; color: #0056b3; }
+                    .status-shipped { background: #e7e3ff; color: #6f42c1; }
+                    .status-delivered { background: #d4edda; color: #155724; }
+                    .status-cancelled { background: #f8d7da; color: #721c24; }
+                </style>
+            </head>
+            <body>
+                ${printContent.outerHTML}
+            </body>
+            </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(printHTML);
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+            printWindow.close();
+        } else {
+            showToast('Please allow pop-ups to print', 'error');
+        }
+    }
+    
+    // Download receipt - FIXED
+    function downloadReceipt() {
+        const order = getCurrentOrderFromModal();
+        if (!order) {
+            showToast('No order found', 'error');
+            return;
+        }
+        
+        generateReceipt(order);
+        showToast('Receipt downloaded successfully', 'success');
+    }
+    
+    // Generate receipt
+    function generateReceipt(order) {
+        const orderDate = formatDate(order.createdAt);
+        const statusDisplay = getStatusDisplay(order.status);
+        const paymentMethodDisplay = (order.paymentMethod === 'cod' || !order.paymentMethod) ? 'Cash on Delivery' : 'Online Payment';
+        
+        const receiptHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Receipt #${order.id}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; max-width: 400px; }
+                    .receipt-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                    .receipt-details { margin-bottom: 20px; }
+                    .receipt-item { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                    .receipt-total { border-top: 2px solid #333; padding-top: 10px; margin-top: 10px; }
+                    .footer { text-align: center; margin-top: 20px; font-size: 0.9em; color: #666; }
+                </style>
+            </head>
+            <body>
+                <div class="receipt-header">
+                    <h2>📚 Pahana Edu</h2>
+                    <p>RECEIPT</p>
+                </div>
+                
+                <div class="receipt-details">
+                    <div class="receipt-item">
+                        <span>Order #:</span>
+                        <span>${order.id}</span>
+                    </div>
+                    <div class="receipt-item">
+                        <span>Date:</span>
+                        <span>${orderDate}</span>
+                    </div>
+                    <div class="receipt-item">
+                        <span>Status:</span>
+                        <span>${statusDisplay}</span>
+                    </div>
+                    <div class="receipt-item">
+                        <span>Payment:</span>
+                        <span>${paymentMethodDisplay}</span>
+                    </div>
+                </div>
+                
+                <div class="receipt-items">
+                    ${(order.orderItems || []).map(item => `
+                        <div class="receipt-item">
+                            <span>${item.itemTitle || 'Unknown Item'}</span>
+                            <span>Rs. ${(parseFloat(item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="receipt-total">
+                    <div class="receipt-item">
+                        <strong>Total: Rs. ${parseFloat(order.totalAmount || 0).toFixed(2)}</strong>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>Thank you for your business!</p>
+                    <p>www.pahanaedu.lk</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        const blob = new Blob([receiptHTML], { type: 'text/html' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `receipt_${order.id}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+    
+    // Get current order from modal
+    function getCurrentOrderFromModal() {
+        const modalBody = document.getElementById('orderDetailsBody');
+        if (!modalBody) return null;
+        
+        const orderIdElement = modalBody.querySelector('.detail-value');
+        if (!orderIdElement) return null;
+        
+        const orderId = orderIdElement.textContent.replace('#', '');
+        return allOrders.find(o => o.id.toString() === orderId);
+    }
+    
     // Utility functions
     function canCancelOrder(status) {
         return status === 'pending' || status === 'confirmed';
@@ -544,14 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
     
-    function printOrderDetails() {
-        window.print();
-    }
-    
-    function downloadReceipt() {
-        showToast('✅ Receipt download feature coming soon...', 'info');
-    }
-    
     function closeModal() {
         const modal = document.getElementById('orderDetailsModal');
         if (modal) {
@@ -581,6 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // FIXED: Toast notification function
     function showToast(message, type = 'info') {
         const toast = document.getElementById('toast');
         const toastMessage = document.getElementById('toastMessage');
@@ -592,16 +708,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         toastMessage.textContent = message;
         toast.className = `toast show ${type}`;
+        toast.style.display = 'block';
         
         setTimeout(() => {
             hideToast();
-        }, 5000);
+        }, 3000);
     }
     
     function hideToast() {
         const toast = document.getElementById('toast');
         if (toast) {
             toast.className = 'toast';
+            toast.style.display = 'none';
         }
     }
 });

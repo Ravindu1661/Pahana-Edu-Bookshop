@@ -19,6 +19,9 @@ if (session.getAttribute("user") == null ||
     <link rel="stylesheet" href="assets/css/customer-style.css">
     <link rel="stylesheet" href="assets/css/checkout.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -155,12 +158,49 @@ if (session.getAttribute("user") == null ||
                                     </div>
                                 </div>
                                 
+                                <!-- Card Details Form - Hidden by default -->
+                                <div class="card-details-form" id="cardDetailsForm">
+                                    <h4><i class="fas fa-lock"></i> Card Details</h4>
+                                    <div class="card-form-grid">
+                                        <div class="form-group">
+                                            <label for="cardNumber">Card Number *</label>
+                                            <input type="text" id="cardNumber" name="cardNumber" placeholder="1234 5678 9012 3456" maxlength="19">
+                                            <div class="error-message">Please enter a valid card number</div>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label for="cardHolder">Card Holder Name *</label>
+                                            <input type="text" id="cardHolder" name="cardHolder" placeholder="John Doe">
+                                            <div class="error-message">Please enter card holder name</div>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="expiryDate">Expiry Date *</label>
+                                                <input type="text" id="expiryDate" name="expiryDate" placeholder="MM/YY" maxlength="5">
+                                                <div class="error-message">Please enter a valid expiry date</div>
+                                            </div>
+                                            
+                                            <div class="form-group">
+                                                <label for="cvv">CVV *</label>
+                                                <input type="text" id="cvv" name="cvv" placeholder="123" maxlength="3">
+                                                <div class="error-message">Please enter a valid CVV</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="payment-security">
+                                        <i class="fas fa-shield-alt"></i>
+                                        <span>Your card details are encrypted and secure</span>
+                                    </div>
+                                </div>
+                                
                                 <div class="step-actions">
                                     <button type="button" class="btn btn-secondary" onclick="prevStep(2)">
                                         <i class="fas fa-arrow-left"></i> Back
                                     </button>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-check"></i> Place Order
+                                    <button type="submit" class="btn btn-primary" id="placeOrderBtn">
+                                        <i class="fas fa-check"></i> <span id="placeOrderText">Place Order</span>
                                     </button>
                                 </div>
                             </div>
@@ -222,6 +262,8 @@ if (session.getAttribute("user") == null ||
                 <div class="order-details">
                     <p><strong>Order ID:</strong> <span id="orderIdDisplay"></span></p>
                     <p><strong>Total Amount:</strong> <span id="totalAmountDisplay"></span></p>
+                    <p><strong>Payment Method:</strong> <span id="paymentMethodDisplay"></span></p>
+                    <p style="display: none;"><strong>Transaction ID:</strong> <span id="transactionIdDisplay"></span></p>
                     <p><strong>Delivery:</strong> 3-5 business days</p>
                 </div>
             </div>

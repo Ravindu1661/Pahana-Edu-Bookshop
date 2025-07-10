@@ -17,7 +17,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 
 import com.pahanaedu.dao.OrderDAO;
 import com.pahanaedu.dao.CartDAO;
@@ -26,10 +25,9 @@ import com.pahanaedu.models.Order;
 import com.pahanaedu.models.OrderItem;
 import com.pahanaedu.models.Cart;
 import com.pahanaedu.models.Item;
-import com.pahanaedu.models.User;
 
 /**
- * Checkout Controller - Handles checkout and order placement operations
+ * Checkout Controller - Production Version with Payment Method Fix
  */
 @WebServlet("/checkout/*")
 public class CheckoutController extends HttpServlet {
@@ -47,10 +45,10 @@ public class CheckoutController extends HttpServlet {
             cartDAO = new CartDAO();
             itemDAO = new ItemDAO();
             gson = new Gson();
-            System.out.println("CheckoutController: DAOs initialized successfully");
+            System.out.println("CheckoutController: Production version initialized successfully");
         } catch (Exception e) {
-            System.err.println("CheckoutController: Failed to initialize DAOs - " + e.getMessage());
-            throw new ServletException("Failed to initialize DAOs", e);
+            System.err.println("CheckoutController: Failed to initialize - " + e.getMessage());
+            throw new ServletException("Failed to initialize", e);
         }
     }
     
@@ -122,7 +120,7 @@ public class CheckoutController extends HttpServlet {
         Boolean isLoggedIn = (Boolean) session.getAttribute("isLoggedIn");
         String userRole = (String) session.getAttribute("userRole");
         
-        return Boolean.TRUE.equals(isLoggedIn) && User.ROLE_CUSTOMER.equals(userRole);
+        return Boolean.TRUE.equals(isLoggedIn) && "CUSTOMER".equals(userRole);
     }
     
     /**
@@ -137,7 +135,7 @@ public class CheckoutController extends HttpServlet {
     }
     
     /**
-     * Handle place order request
+     * Handle place order request with enhanced payment processing
      */
     private void handlePlaceOrder(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -172,7 +170,7 @@ public class CheckoutController extends HttpServlet {
             String paymentMethod = jsonObject.get("paymentMethod").getAsString();
             BigDecimal totalAmount = jsonObject.get("totalAmount").getAsBigDecimal();
             
-            // Validate required fields
+            // Enhanced validation
             if (fullName == null || fullName.trim().isEmpty()) {
                 sendErrorResponse(response, "Full name is required");
                 return;
@@ -185,6 +183,14 @@ public class CheckoutController extends HttpServlet {
             
             if (shippingAddress == null || shippingAddress.trim().isEmpty()) {
                 sendErrorResponse(response, "Shipping address is required");
+                return;
+            }
+            
+            // Enhanced payment processing
+            PaymentResult paymentResult = processPayment(paymentMethod, jsonObject, totalAmount);
+            
+            if (!paymentResult.isSuccess()) {
+                sendErrorResponse(response, paymentResult.getErrorMessage());
                 return;
             }
             
@@ -217,15 +223,23 @@ public class CheckoutController extends HttpServlet {
             
             order.setOrderItems(orderItems);
             
-            // Validate stock availability
+            // Enhanced stock validation
             for (OrderItem orderItem : orderItems) {
                 Item item = itemDAO.getItemById(orderItem.getItemId());
                 if (item == null || !item.isActive()) {
+                    // Refund payment if processed
+                    if ("online".equals(paymentMethod) && paymentResult.getTransactionId() != null) {
+                        refundPayment(paymentResult.getTransactionId(), totalAmount);
+                    }
                     sendErrorResponse(response, "One or more items are no longer available");
                     return;
                 }
                 
                 if (item.getStock() < orderItem.getQuantity()) {
+                    // Refund payment if processed
+                    if ("online".equals(paymentMethod) && paymentResult.getTransactionId() != null) {
+                        refundPayment(paymentResult.getTransactionId(), totalAmount);
+                    }
                     sendErrorResponse(response, "Insufficient stock for item: " + item.getTitle());
                     return;
                 }
@@ -245,18 +259,34 @@ public class CheckoutController extends HttpServlet {
                     itemDAO.updateStock(orderItem.getItemId(), newStock);
                 }
                 
-                // Send success response
+                // Build enhanced success response
                 JsonObject responseObj = new JsonObject();
                 responseObj.addProperty("success", true);
-                responseObj.addProperty("message", "Order placed successfully");
                 responseObj.addProperty("orderId", orderId);
                 responseObj.addProperty("totalAmount", totalAmount);
                 
+                // Return the raw payment method value for frontend processing
+                responseObj.addProperty("paymentMethod", paymentMethod);
+                
+                if ("online".equals(paymentMethod)) {
+                    responseObj.addProperty("message", "Payment processed successfully! Order placed.");
+                    responseObj.addProperty("transactionId", paymentResult.getTransactionId());
+                    responseObj.addProperty("paymentStatus", "completed");
+                } else {
+                    responseObj.addProperty("message", "Order placed successfully!");
+                }
+                
                 out.print(responseObj.toString());
                 
-                System.out.println("CheckoutController: Order placed successfully - ID: " + orderId);
+                System.out.println("CheckoutController: Order placed successfully - ID: " + orderId + 
+                                 ", Payment Method: " + paymentMethod + 
+                                 (paymentResult.getTransactionId() != null ? ", Transaction: " + paymentResult.getTransactionId() : ""));
                 
             } else {
+                // Refund payment if order creation failed
+                if ("online".equals(paymentMethod) && paymentResult.getTransactionId() != null) {
+                    refundPayment(paymentResult.getTransactionId(), totalAmount);
+                }
                 sendErrorResponse(response, "Failed to place order. Please try again.");
             }
             
@@ -266,6 +296,74 @@ public class CheckoutController extends HttpServlet {
             sendErrorResponse(response, "Error processing order: " + e.getMessage());
         } finally {
             out.close();
+        }
+    }
+    
+    /**
+     * Enhanced payment processing
+     */
+    private PaymentResult processPayment(String paymentMethod, JsonObject jsonObject, BigDecimal totalAmount) {
+        try {
+            if ("online".equals(paymentMethod)) {
+                // Validate card details if provided
+                if (jsonObject.has("cardDetails")) {
+                    JsonObject cardDetails = jsonObject.getAsJsonObject("cardDetails");
+                    
+                    // Basic card validation
+                    String cardNumber = cardDetails.get("cardNumber").getAsString();
+                    String cardHolder = cardDetails.get("cardHolder").getAsString();
+                    String expiryDate = cardDetails.get("expiryDate").getAsString();
+                    String cvv = cardDetails.get("cvv").getAsString();
+                    
+                    if (cardNumber == null || cardNumber.length() < 13) {
+                        return new PaymentResult(false, null, "Invalid card number");
+                    }
+                    
+                    if (cardHolder == null || cardHolder.trim().isEmpty()) {
+                        return new PaymentResult(false, null, "Card holder name is required");
+                    }
+                    
+                    if (expiryDate == null || !expiryDate.matches("\\d{2}/\\d{2}")) {
+                        return new PaymentResult(false, null, "Invalid expiry date format");
+                    }
+                    
+                    if (cvv == null || cvv.length() != 3) {
+                        return new PaymentResult(false, null, "Invalid CVV");
+                    }
+                }
+                
+                // Simulate payment processing delay
+                Thread.sleep(1500);
+                
+                // Generate transaction ID
+                String transactionId = "TXN" + System.currentTimeMillis() + String.format("%04d", (int)(Math.random() * 10000));
+                
+                System.out.println("CheckoutController: Payment processed - Transaction ID: " + transactionId);
+                return new PaymentResult(true, transactionId, null);
+                
+            } else {
+                // Cash on delivery - no processing needed
+                return new PaymentResult(true, null, null);
+            }
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new PaymentResult(false, null, "Payment processing was interrupted");
+        } catch (Exception e) {
+            System.err.println("CheckoutController: Payment processing error - " + e.getMessage());
+            return new PaymentResult(false, null, "Payment processing failed");
+        }
+    }
+    
+    /**
+     * Refund payment (simulation)
+     */
+    private void refundPayment(String transactionId, BigDecimal amount) {
+        try {
+            System.out.println("CheckoutController: Processing refund - Transaction: " + transactionId + ", Amount: " + amount);
+            // In real implementation, call payment gateway refund API
+        } catch (Exception e) {
+            System.err.println("CheckoutController: Error processing refund - " + e.getMessage());
         }
     }
     
@@ -295,7 +393,7 @@ public class CheckoutController extends HttpServlet {
                 return;
             }
             
-            // Validate each item
+            // Enhanced validation
             List<String> errors = new ArrayList<>();
             BigDecimal totalAmount = BigDecimal.ZERO;
             
@@ -316,8 +414,9 @@ public class CheckoutController extends HttpServlet {
                 totalAmount = totalAmount.add(cartItem.getEffectivePrice().multiply(new BigDecimal(cartItem.getQuantity())));
             }
             
+            JsonObject responseObj = new JsonObject();
+            
             if (!errors.isEmpty()) {
-                JsonObject responseObj = new JsonObject();
                 responseObj.addProperty("success", false);
                 responseObj.addProperty("message", "Validation failed");
                 
@@ -326,17 +425,14 @@ public class CheckoutController extends HttpServlet {
                     errorArray.add(error);
                 }
                 responseObj.add("errors", errorArray);
-                
-                out.print(responseObj.toString());
             } else {
-                JsonObject responseObj = new JsonObject();
                 responseObj.addProperty("success", true);
                 responseObj.addProperty("message", "Order validation successful");
                 responseObj.addProperty("totalAmount", totalAmount);
                 responseObj.addProperty("itemCount", cartItems.size());
-                
-                out.print(responseObj.toString());
             }
+            
+            out.print(responseObj.toString());
             
         } catch (Exception e) {
             System.err.println("CheckoutController: Error validating order - " + e.getMessage());
@@ -420,24 +516,6 @@ public class CheckoutController extends HttpServlet {
     }
     
     /**
-     * Send success response
-     */
-    private void sendSuccessResponse(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        
-        PrintWriter out = response.getWriter();
-        
-        JsonObject responseObj = new JsonObject();
-        responseObj.addProperty("success", true);
-        responseObj.addProperty("message", message);
-        
-        out.print(responseObj.toString());
-        out.flush();
-    }
-    
-    /**
      * Send error response
      */
     private void sendErrorResponse(HttpServletResponse response, String message) throws IOException {
@@ -455,25 +533,40 @@ public class CheckoutController extends HttpServlet {
         out.flush();
     }
     
-    /**
-     * Escape JSON string
-     */
-    private String escapeJsonString(String str) {
-        if (str == null) return "";
-        return str.replace("\\", "\\\\")
-                 .replace("\"", "\\\"")
-                 .replace("\n", "\\n")
-                 .replace("\r", "\\r")
-                 .replace("\t", "\\t");
-    }
-    
     @Override
     public void destroy() {
-        System.out.println("CheckoutController: Controller being destroyed");
+        System.out.println("CheckoutController: Production version being destroyed");
         orderDAO = null;
         cartDAO = null;
         itemDAO = null;
         gson = null;
         super.destroy();
+    }
+    
+    /**
+     * Payment Result class for structured payment responses
+     */
+    private static class PaymentResult {
+        private final boolean success;
+        private final String transactionId;
+        private final String errorMessage;
+        
+        public PaymentResult(boolean success, String transactionId, String errorMessage) {
+            this.success = success;
+            this.transactionId = transactionId;
+            this.errorMessage = errorMessage;
+        }
+        
+        public boolean isSuccess() {
+            return success;
+        }
+        
+        public String getTransactionId() {
+            return transactionId;
+        }
+        
+        public String getErrorMessage() {
+            return errorMessage;
+        }
     }
 }

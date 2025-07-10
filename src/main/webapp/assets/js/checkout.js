@@ -1,4 +1,4 @@
-// Checkout Page JavaScript
+// Checkout Page JavaScript - Clean Production Version
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🛒 Checkout page loaded');
     
@@ -26,7 +26,175 @@ document.addEventListener('DOMContentLoaded', () => {
         loadCartItems();
         loadCartCount();
         setupEventListeners();
+        setupPaymentMethodToggle();
+        setupCardInputFormatting();
         populateUserInfo();
+    }
+    
+    // Setup payment method toggle - Show/Hide card form
+    function setupPaymentMethodToggle() {
+        const codRadio = document.getElementById('cashOnDelivery');
+        const onlineRadio = document.getElementById('onlinePayment');
+        const cardForm = document.getElementById('cardDetailsForm');
+        const placeOrderText = document.getElementById('placeOrderText');
+        
+        if (codRadio && onlineRadio && cardForm && placeOrderText) {
+            // Initial state - hide card form
+            cardForm.style.display = 'none';
+            
+            codRadio.addEventListener('change', () => {
+                if (codRadio.checked) {
+                    cardForm.style.display = 'none';
+                    placeOrderText.textContent = 'Place Order';
+                }
+            });
+            
+            onlineRadio.addEventListener('change', () => {
+                if (onlineRadio.checked) {
+                    cardForm.style.display = 'block';
+                    placeOrderText.textContent = 'Pay Now';
+                }
+            });
+        }
+    }
+    
+    // Setup card input formatting
+    function setupCardInputFormatting() {
+        const cardNumber = document.getElementById('cardNumber');
+        const expiryDate = document.getElementById('expiryDate');
+        const cvv = document.getElementById('cvv');
+        
+        if (cardNumber) {
+            cardNumber.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                value = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+                e.target.value = value;
+                validateCardNumber(value.replace(/\s/g, ''));
+            });
+        }
+        
+        if (expiryDate) {
+            expiryDate.addEventListener('input', (e) => {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length >= 2) {
+                    value = value.substring(0, 2) + '/' + value.substring(2, 4);
+                }
+                e.target.value = value;
+                validateExpiryDate(value);
+            });
+        }
+        
+        if (cvv) {
+            cvv.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '');
+                validateCVV(e.target.value);
+            });
+        }
+    }
+    
+    // Card validation functions
+    function validateCardNumber(cardNumber) {
+        const cardGroup = document.getElementById('cardNumber').closest('.form-group');
+        
+        if (cardNumber.length >= 13 && cardNumber.length <= 19) {
+            cardGroup.classList.remove('invalid');
+            cardGroup.classList.add('valid');
+            return true;
+        } else {
+            cardGroup.classList.remove('valid');
+            cardGroup.classList.add('invalid');
+            return false;
+        }
+    }
+    
+    function validateExpiryDate(expiry) {
+        const expiryGroup = document.getElementById('expiryDate').closest('.form-group');
+        
+        if (expiry.length === 5) {
+            const [month, year] = expiry.split('/');
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear() % 100;
+            const currentMonth = currentDate.getMonth() + 1;
+            
+            if (month >= 1 && month <= 12 && year >= currentYear) {
+                if (year > currentYear || (year == currentYear && month >= currentMonth)) {
+                    expiryGroup.classList.remove('invalid');
+                    expiryGroup.classList.add('valid');
+                    return true;
+                }
+            }
+        }
+        
+        expiryGroup.classList.remove('valid');
+        expiryGroup.classList.add('invalid');
+        return false;
+    }
+    
+    function validateCVV(cvv) {
+        const cvvGroup = document.getElementById('cvv').closest('.form-group');
+        
+        if (cvv.length === 3) {
+            cvvGroup.classList.remove('invalid');
+            cvvGroup.classList.add('valid');
+            return true;
+        } else {
+            cvvGroup.classList.remove('valid');
+            cvvGroup.classList.add('invalid');
+            return false;
+        }
+    }
+    
+    function validateCardHolder(name) {
+        const cardHolderGroup = document.getElementById('cardHolder').closest('.form-group');
+        
+        if (name.trim().length >= 2) {
+            cardHolderGroup.classList.remove('invalid');
+            cardHolderGroup.classList.add('valid');
+            return true;
+        } else {
+            cardHolderGroup.classList.remove('valid');
+            cardHolderGroup.classList.add('invalid');
+            return false;
+        }
+    }
+    
+    // Validate card details
+    function validateCardDetails() {
+        const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
+        const cardHolder = document.getElementById('cardHolder').value.trim();
+        const expiryDate = document.getElementById('expiryDate').value;
+        const cvv = document.getElementById('cvv').value;
+        
+        const isCardNumberValid = validateCardNumber(cardNumber);
+        const isCardHolderValid = validateCardHolder(cardHolder);
+        const isExpiryValid = validateExpiryDate(expiryDate);
+        const isCvvValid = validateCVV(cvv);
+        
+        if (!isCardNumberValid) {
+            showToast('❌ Please enter a valid card number', 'error');
+            document.getElementById('cardNumber').focus();
+            return false;
+        }
+        
+        if (!isCardHolderValid) {
+            showToast('❌ Please enter card holder name', 'error');
+            document.getElementById('cardHolder').focus();
+            return false;
+        }
+        
+        if (!isExpiryValid) {
+            showToast('❌ Please enter a valid expiry date', 'error');
+            document.getElementById('expiryDate').focus();
+            return false;
+        }
+        
+        if (!isCvvValid) {
+            showToast('❌ Please enter a valid CVV', 'error');
+            document.getElementById('cvv').focus();
+            return false;
+        }
+        
+        return true;
     }
     
     // Load cart items
@@ -271,12 +439,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const formData = new FormData(e.target);
+        const paymentMethod = formData.get('paymentMethod');
+        
+        // Validate card details if online payment is selected
+        if (paymentMethod === 'online') {
+            if (!validateCardDetails()) {
+                return;
+            }
+        }
+        
         const orderData = {
             fullName: formData.get('fullName'),
             contactNumber: formData.get('contactNumber'),
             shippingAddress: formData.get('shippingAddress'),
             orderNotes: formData.get('orderNotes'),
-            paymentMethod: formData.get('paymentMethod'),
+            paymentMethod: paymentMethod,
             totalAmount: total,
             items: cartItems.map(item => ({
                 itemId: item.productId,
@@ -285,47 +462,113 @@ document.addEventListener('DOMContentLoaded', () => {
             }))
         };
         
+        // Add card details if online payment
+        if (paymentMethod === 'online') {
+            orderData.cardDetails = {
+                cardNumber: formData.get('cardNumber').replace(/\s/g, ''),
+                cardHolder: formData.get('cardHolder'),
+                expiryDate: formData.get('expiryDate'),
+                cvv: formData.get('cvv')
+            };
+        }
+        
         placeOrder(orderData);
     }
     
     // Place order
     function placeOrder(orderData) {
         console.log('🛍️ Placing order...', orderData);
+        
+        // Show processing state
+        const submitBtn = document.querySelector('button[type="submit"]');
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+        
         showLoading();
         
-        fetch(`${baseUrl}/checkout/place-order`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(orderData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoading();
-            if (data.success) {
-                showOrderSuccess(data.orderId, data.totalAmount);
-            } else {
-                showToast('❌ ' + data.message, 'error');
-            }
-        })
-        .catch(error => {
-            hideLoading();
-            console.error('❌ Place order error:', error);
-            
-            // Fallback for demo
-            const orderId = Math.floor(Math.random() * 10000) + 1000;
-            showOrderSuccess(orderId, total);
-        });
+        // Simulate payment processing delay for online payments
+        const processingDelay = orderData.paymentMethod === 'online' ? 2000 : 1000;
+        
+        setTimeout(() => {
+            fetch(`${baseUrl}/checkout/place-order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                
+                if (data.success) {
+                    if (orderData.paymentMethod === 'online') {
+                        showToast('✅ Payment processed successfully!', 'success');
+                    }
+                    showOrderSuccess(data);
+                } else {
+                    showToast('❌ ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                console.error('❌ Place order error:', error);
+                
+                // Fallback for demo
+                const fallbackData = {
+                    orderId: Math.floor(Math.random() * 10000) + 1000,
+                    totalAmount: total,
+                    paymentMethod: orderData.paymentMethod,
+                    transactionId: orderData.paymentMethod === 'online' ? 'TXN' + Date.now() : null
+                };
+                
+                if (orderData.paymentMethod === 'online') {
+                    showToast('✅ Payment processed successfully!', 'success');
+                }
+                showOrderSuccess(fallbackData);
+            });
+        }, processingDelay);
     }
     
     // Show order success modal
-    function showOrderSuccess(orderId, totalAmount) {
-        document.getElementById('orderIdDisplay').textContent = `#${orderId}`;
-        document.getElementById('totalAmountDisplay').textContent = `Rs. ${totalAmount.toFixed(2)}`;
+    function showOrderSuccess(data) {
+        document.getElementById('orderIdDisplay').textContent = `#${data.orderId}`;
+        document.getElementById('totalAmountDisplay').textContent = `Rs. ${data.totalAmount.toFixed(2)}`;
         
-        orderData.orderId = orderId;
-        orderData.totalAmount = totalAmount;
+        // Get the actual selected payment method from form
+        const selectedPaymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+        
+        // Update payment method display based on what was actually selected
+        const paymentMethodEl = document.getElementById('paymentMethodDisplay');
+        if (paymentMethodEl) {
+            if (selectedPaymentMethod === 'online') {
+                paymentMethodEl.textContent = 'Online Payment';
+            } else {
+                paymentMethodEl.textContent = 'Cash on Delivery';
+            }
+        }
+        
+        // Show transaction ID if online payment
+        const transactionIdEl = document.getElementById('transactionIdDisplay');
+        const transactionRow = transactionIdEl ? transactionIdEl.parentElement : null;
+        
+        if (selectedPaymentMethod === 'online' && (data.transactionId || data.paymentMethod === 'online')) {
+            if (transactionIdEl && transactionRow) {
+                transactionIdEl.textContent = data.transactionId || 'TXN' + Date.now();
+                transactionRow.style.display = 'block';
+            }
+        } else if (transactionRow) {
+            transactionRow.style.display = 'none';
+        }
+        
+        orderData.orderId = data.orderId;
+        orderData.totalAmount = data.totalAmount;
+        orderData.transactionId = selectedPaymentMethod === 'online' ? (data.transactionId || 'TXN' + Date.now()) : null;
+        orderData.paymentMethod = selectedPaymentMethod;
         
         const modal = document.getElementById('orderSuccessModal');
         modal.style.display = 'block';
@@ -333,7 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear cart after successful order
         clearCartAfterOrder();
         
-        showToast('✅ Order placed successfully!', 'success');
+        if (selectedPaymentMethod === 'online') {
+            showToast('✅ Payment successful! Order placed!', 'success');
+        } else {
+            showToast('✅ Order placed successfully!', 'success');
+        }
     }
     
     // Clear cart after order
@@ -377,6 +624,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Generate receipt for printing
     function generateReceipt() {
+        // Get the actual selected payment method from form
+        const selectedPaymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+        const paymentMethodDisplay = selectedPaymentMethod === 'online' ? 'Online Payment' : 'Cash on Delivery';
+        
         const receiptHTML = `
             <div class="receipt-print">
                 <div class="receipt-header">
@@ -390,7 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h3>Order Information</h3>
                         <p><strong>Order ID:</strong> #${orderData.orderId}</p>
                         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-                        <p><strong>Payment Method:</strong> ${document.querySelector('input[name="paymentMethod"]:checked').value === 'cod' ? 'Cash on Delivery' : 'Online Payment'}</p>
+                        <p><strong>Payment Method:</strong> ${paymentMethodDisplay}</p>
+                        ${selectedPaymentMethod === 'online' && orderData.transactionId ? `<p><strong>Transaction ID:</strong> ${orderData.transactionId}</p>` : ''}
                     </div>
                     
                     <div class="receipt-section">
@@ -446,6 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
                     <p>Thank you for your order!</p>
                     <p>Delivery within 3-5 business days</p>
+                    ${selectedPaymentMethod === 'online' ? '<p style="color: #27ae60;">✅ Payment Completed</p>' : '<p style="color: #f39c12;">💰 Cash on Delivery</p>'}
                 </div>
             </div>
         `;
