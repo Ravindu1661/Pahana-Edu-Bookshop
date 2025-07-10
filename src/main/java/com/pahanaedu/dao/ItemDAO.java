@@ -92,6 +92,22 @@ public class ItemDAO {
         "ORDER BY i.created_at DESC " +
         "LIMIT ?";
     
+    // Stock management queries
+    private static final String UPDATE_STOCK = 
+        "UPDATE items SET stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    
+    private static final String DECREASE_STOCK = 
+        "UPDATE items SET stock = stock - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND stock >= ?";
+    
+    private static final String INCREASE_STOCK = 
+        "UPDATE items SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    
+    private static final String GET_CURRENT_STOCK = 
+        "SELECT stock FROM items WHERE id = ?";
+    
+    private static final String UPDATE_ITEM_STATUS = 
+        "UPDATE items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    
     /**
      * Generate unique reference number
      */
@@ -493,6 +509,284 @@ public class ItemDAO {
         }
         
         return items;
+    }
+    
+    // ==================== STOCK MANAGEMENT METHODS ====================
+    
+    /**
+     * Update item stock
+     */
+    public boolean updateStock(int itemId, int newStock) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_STOCK)) {
+            
+            statement.setInt(1, newStock);
+            statement.setInt(2, itemId);
+            
+            int rowsAffected = statement.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                System.out.println("ItemDAO: Stock updated successfully for item ID: " + itemId + ", New stock: " + newStock);
+                
+                // Update status based on stock
+                if (newStock == 0) {
+                    updateItemStatus(itemId, "out_of_stock");
+                } else {
+                    updateItemStatus(itemId, "active");
+                }
+                
+                return true;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error updating stock - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Decrease item stock
+     */
+    public boolean decreaseStock(int itemId, int quantity) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(DECREASE_STOCK)) {
+            
+            statement.setInt(1, quantity);
+            statement.setInt(2, itemId);
+            statement.setInt(3, quantity);
+            
+            int rowsAffected = statement.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                System.out.println("ItemDAO: Stock decreased successfully for item ID: " + itemId + ", Quantity: " + quantity);
+                
+                // Check if stock is now zero and update status
+                int currentStock = getCurrentStock(itemId);
+                if (currentStock == 0) {
+                    updateItemStatus(itemId, "out_of_stock");
+                }
+                
+                return true;
+            } else {
+                System.out.println("ItemDAO: Insufficient stock for item ID: " + itemId);
+                return false;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error decreasing stock - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Increase item stock
+     */
+    public boolean increaseStock(int itemId, int quantity) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(INCREASE_STOCK)) {
+            
+            statement.setInt(1, quantity);
+            statement.setInt(2, itemId);
+            
+            int rowsAffected = statement.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                System.out.println("ItemDAO: Stock increased successfully for item ID: " + itemId + ", Quantity: " + quantity);
+                
+                // If item was out of stock, make it active
+                Item item = getItemById(itemId);
+                if (item != null && "out_of_stock".equals(item.getStatus())) {
+                    updateItemStatus(itemId, "active");
+                }
+                
+                return true;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error increasing stock - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get current stock for an item
+     */
+    public int getCurrentStock(int itemId) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(GET_CURRENT_STOCK)) {
+            
+            statement.setInt(1, itemId);
+            ResultSet resultSet = statement.executeQuery();
+            
+            if (resultSet.next()) {
+                return resultSet.getInt("stock");
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error getting current stock - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * Check if item has sufficient stock
+     */
+    public boolean hasSufficientStock(int itemId, int requiredQuantity) {
+        int currentStock = getCurrentStock(itemId);
+        return currentStock >= requiredQuantity;
+    }
+    
+    /**
+     * Update item status
+     */
+    public boolean updateItemStatus(int itemId, String status) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_ITEM_STATUS)) {
+            
+            statement.setString(1, status);
+            statement.setInt(2, itemId);
+            
+            int rowsAffected = statement.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                System.out.println("ItemDAO: Status updated successfully for item ID: " + itemId + ", Status: " + status);
+                return true;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error updating status - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Bulk update stock for multiple items
+     */
+    public boolean bulkUpdateStock(List<Integer> itemIds, List<Integer> quantities) {
+        if (itemIds.size() != quantities.size()) {
+            System.err.println("ItemDAO: Item IDs and quantities lists must have the same size");
+            return false;
+        }
+        
+        Connection connection = null;
+        PreparedStatement statement = null;
+        
+        try {
+            connection = DatabaseConnection.getConnection();
+            connection.setAutoCommit(false); // Start transaction
+            
+            statement = connection.prepareStatement(DECREASE_STOCK);
+            
+            for (int i = 0; i < itemIds.size(); i++) {
+                int itemId = itemIds.get(i);
+                int quantity = quantities.get(i);
+                
+                statement.setInt(1, quantity);
+                statement.setInt(2, itemId);
+                statement.setInt(3, quantity);
+                statement.addBatch();
+            }
+            
+            int[] results = statement.executeBatch();
+            
+            // Check if all updates were successful
+            boolean allSuccessful = true;
+            for (int result : results) {
+                if (result == 0) {
+                    allSuccessful = false;
+                    break;
+                }
+            }
+            
+            if (allSuccessful) {
+                connection.commit();
+                System.out.println("ItemDAO: Bulk stock update successful for " + itemIds.size() + " items");
+                
+                // Update status for items that are now out of stock
+                for (int itemId : itemIds) {
+                    int currentStock = getCurrentStock(itemId);
+                    if (currentStock == 0) {
+                        updateItemStatus(itemId, "out_of_stock");
+                    }
+                }
+                
+                return true;
+            } else {
+                connection.rollback();
+                System.err.println("ItemDAO: Bulk stock update failed - insufficient stock for one or more items");
+                return false;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error in bulk stock update - " + e.getMessage());
+            e.printStackTrace();
+            
+            if (connection != null) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackEx) {
+                    System.err.println("ItemDAO: Error rolling back transaction - " + rollbackEx.getMessage());
+                }
+            }
+        } finally {
+            try {
+                if (statement != null) statement.close();
+                if (connection != null) {
+                    connection.setAutoCommit(true);
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                System.err.println("ItemDAO: Error closing resources - " + e.getMessage());
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get low stock items (stock <= threshold)
+     */
+    public List<Item> getLowStockItems(int threshold) {
+        String sql = "SELECT i.*, c.name as category_name FROM items i " +
+                    "LEFT JOIN categories c ON i.category_id = c.id " +
+                    "WHERE i.stock <= ? AND i.status = 'active' " +
+                    "ORDER BY i.stock ASC";
+        
+        List<Item> items = new ArrayList<>();
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            
+            statement.setInt(1, threshold);
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                items.add(extractItemFromResultSet(resultSet));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error getting low stock items - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return items;
+    }
+    
+    /**
+     * Get out of stock items
+     */
+    public List<Item> getOutOfStockItems() {
+        return getItemsByStatus("out_of_stock");
     }
     
     /**
