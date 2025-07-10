@@ -14,46 +14,56 @@ import com.pahanaedu.models.OrderItem;
 import com.pahanaedu.utils.DatabaseConnection;
 
 /**
- * Data Access Object for Order operations
+ * Data Access Object for Order operations - Updated for final database structure
  */
 public class OrderDAO {
     
-    // SQL Queries
+    // SQL Queries - Updated to match your exact database structure
     private static final String INSERT_ORDER = 
-        "INSERT INTO orders (user_id, total_amount, status, shipping_address, contact_number) " +
-        "VALUES (?, ?, ?, ?, ?)";
+        "INSERT INTO orders (user_id, total_amount, status, shipping_address, contact_number, payment_method) " +
+        "VALUES (?, ?, ?, ?, ?, ?)";
     
     private static final String INSERT_ORDER_ITEM = 
         "INSERT INTO order_items (order_id, item_id, quantity, price) " +
         "VALUES (?, ?, ?, ?)";
     
     private static final String SELECT_ORDER_BY_ID = 
-        "SELECT o.*, u.name as customer_name, u.email as customer_email " +
+        "SELECT o.*, " +
+        "CONCAT(u.first_name, ' ', u.last_name) as customer_name, " +
+        "u.email as customer_email " +
         "FROM orders o " +
         "LEFT JOIN users u ON o.user_id = u.id " +
         "WHERE o.id = ?";
     
     private static final String SELECT_ORDERS_BY_USER = 
-        "SELECT o.*, u.name as customer_name, u.email as customer_email " +
+        "SELECT o.*, " +
+        "CONCAT(u.first_name, ' ', u.last_name) as customer_name, " +
+        "u.email as customer_email " +
         "FROM orders o " +
         "LEFT JOIN users u ON o.user_id = u.id " +
         "WHERE o.user_id = ? " +
         "ORDER BY o.created_at DESC";
     
     private static final String SELECT_ALL_ORDERS = 
-        "SELECT o.*, u.name as customer_name, u.email as customer_email " +
+        "SELECT o.*, " +
+        "CONCAT(u.first_name, ' ', u.last_name) as customer_name, " +
+        "u.email as customer_email " +
         "FROM orders o " +
         "LEFT JOIN users u ON o.user_id = u.id " +
         "ORDER BY o.created_at DESC";
     
     private static final String SELECT_ORDER_ITEMS = 
-        "SELECT oi.*, i.title as item_title, i.author as item_author, i.image_path as item_image_path " +
+        "SELECT oi.*, " +
+        "i.title as item_title, " +
+        "i.author as item_author, " +
+        "i.image_path as item_image_path, " +
+        "i.reference_no as item_reference_no " +
         "FROM order_items oi " +
         "LEFT JOIN items i ON oi.item_id = i.id " +
         "WHERE oi.order_id = ?";
     
     private static final String UPDATE_ORDER_STATUS = 
-        "UPDATE orders SET status = ? WHERE id = ?";
+        "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
     
     private static final String COUNT_ORDERS_BY_STATUS = 
         "SELECT COUNT(*) FROM orders WHERE status = ?";
@@ -80,6 +90,7 @@ public class OrderDAO {
             orderStatement.setString(3, order.getStatus());
             orderStatement.setString(4, order.getShippingAddress());
             orderStatement.setString(5, order.getContactNumber());
+            orderStatement.setString(6, order.getPaymentMethod() != null ? order.getPaymentMethod() : "cod");
             
             int rowsAffected = orderStatement.executeUpdate();
             
@@ -179,6 +190,8 @@ public class OrderDAO {
                 orders.add(order);
             }
             
+            System.out.println("OrderDAO: Retrieved " + orders.size() + " orders for user " + userId);
+            
         } catch (SQLException e) {
             System.err.println("OrderDAO: Error getting orders by user - " + e.getMessage());
             e.printStackTrace();
@@ -272,6 +285,31 @@ public class OrderDAO {
     }
     
     /**
+     * Check if order belongs to user
+     */
+    public boolean isOrderOwnedByUser(int orderId, int userId) {
+        String query = "SELECT COUNT(*) FROM orders WHERE id = ? AND user_id = ?";
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(query)) {
+            
+            statement.setInt(1, orderId);
+            statement.setInt(2, userId);
+            ResultSet resultSet = statement.executeQuery();
+            
+            if (resultSet.next()) {
+                return resultSet.getInt(1) > 0;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("OrderDAO: Error checking order ownership - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
      * Count orders by status
      */
     public int countOrdersByStatus(String status) {
@@ -316,7 +354,7 @@ public class OrderDAO {
     }
     
     /**
-     * Extract Order object from ResultSet
+     * Extract Order object from ResultSet - Updated for your database structure
      */
     private Order extractOrderFromResultSet(ResultSet resultSet) throws SQLException {
         Order order = new Order();
@@ -326,10 +364,12 @@ public class OrderDAO {
         order.setStatus(resultSet.getString("status"));
         order.setShippingAddress(resultSet.getString("shipping_address"));
         order.setContactNumber(resultSet.getString("contact_number"));
+        order.setPaymentMethod(resultSet.getString("payment_method"));
         order.setCreatedAt(resultSet.getTimestamp("created_at"));
         order.setUpdatedAt(resultSet.getTimestamp("updated_at"));
         order.setCustomerName(resultSet.getString("customer_name"));
         order.setCustomerEmail(resultSet.getString("customer_email"));
+        
         return order;
     }
 }
