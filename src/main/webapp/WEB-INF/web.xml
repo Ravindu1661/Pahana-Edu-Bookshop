@@ -70,7 +70,11 @@
         <servlet-name>default</servlet-name>
         <url-pattern>/images/*</url-pattern>
     </servlet-mapping>
-    
+    <!-- web.xml එකේ add කරන්න -->
+<servlet-mapping>
+    <servlet-name>CustomerController</servlet-name>
+    <url-pattern>/customer/*</url-pattern>
+</servlet-mapping>
     <!-- ================================================================ -->
     <!-- SERVLET DECLARATIONS (Only if classes exist)                    -->
     <!-- ================================================================ -->
@@ -107,6 +111,7 @@
         <url-pattern>/signup</url-pattern>
     </servlet-mapping>
     -->
+<!-- web.xml එකේ add කරන්න 
     
     <!-- ================================================================ -->
     <!-- FILTERS (Only if filter classes exist)                          -->

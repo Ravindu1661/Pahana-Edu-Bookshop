@@ -2,6 +2,7 @@ package com.pahanaedu.controllers;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -10,27 +11,36 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
-import com.pahanaedu.dao.UserDAO;
+import com.pahanaedu.dao.CategoryDAO;
+import com.pahanaedu.dao.ItemDAO;
+import com.pahanaedu.dao.CartDAO;
+import com.pahanaedu.models.Category;
+import com.pahanaedu.models.Item;
+import com.pahanaedu.models.Cart;
 import com.pahanaedu.models.User;
 
 /**
- * Customer Controller - Handles customer operations
+ * Customer Controller - Handles customer-facing operations
  * Only accessible by users with CUSTOMER role
  */
 @WebServlet("/customer/*")
 public class CustomerController extends HttpServlet {
     private static final long serialVersionUID = 1L;
     
-    private UserDAO userDAO;
+    private ItemDAO itemDAO;
+    private CategoryDAO categoryDAO;
+    private CartDAO cartDAO;
     
     @Override
     public void init() throws ServletException {
         try {
-            userDAO = new UserDAO();
-            System.out.println("CustomerController: UserDAO initialized successfully");
+            itemDAO = new ItemDAO();
+            categoryDAO = new CategoryDAO();
+            cartDAO = new CartDAO();
+            System.out.println("CustomerController: DAOs initialized successfully");
         } catch (Exception e) {
-            System.err.println("CustomerController: Failed to initialize UserDAO - " + e.getMessage());
-            throw new ServletException("Failed to initialize UserDAO", e);
+            System.err.println("CustomerController: Failed to initialize DAOs - " + e.getMessage());
+            throw new ServletException("Failed to initialize DAOs", e);
         }
     }
     
@@ -39,25 +49,39 @@ public class CustomerController extends HttpServlet {
             throws ServletException, IOException {
         
         // Check customer authentication
-        if (!isCustomerAuthenticated(request)) {
-            response.sendRedirect("login.jsp");
+        if (!isAuthorized(request)) {
+            sendErrorResponse(response, "Access denied. Please login as customer.");
             return;
         }
         
         String pathInfo = request.getPathInfo();
         
         if (pathInfo == null || pathInfo.equals("/")) {
-            // Redirect to customer dashboard (main page)
-            response.sendRedirect("index.jsp");
+            sendErrorResponse(response, "Invalid request");
             return;
         }
         
         switch (pathInfo) {
-            case "/profile":
-                handleGetProfile(request, response);
+            case "/categories":
+                handleGetCategories(request, response);
+                break;
+            case "/products/list":
+                handleGetProducts(request, response);
+                break;
+            case "/products/recent":
+                handleGetRecentProducts(request, response);
+                break;
+            case "/products/featured":
+                handleGetFeaturedProducts(request, response);
+                break;
+            case "/cart/items":
+                handleGetCartItems(request, response);
+                break;
+            case "/cart/count":
+                handleGetCartCount(request, response);
                 break;
             default:
-                response.sendError(HttpServletResponse.SC_NOT_FOUND);
+                sendErrorResponse(response, "Invalid operation");
         }
     }
     
@@ -66,8 +90,8 @@ public class CustomerController extends HttpServlet {
             throws ServletException, IOException {
         
         // Check customer authentication
-        if (!isCustomerAuthenticated(request)) {
-            sendErrorResponse(response, "Access denied. Customer authentication required.");
+        if (!isAuthorized(request)) {
+            sendErrorResponse(response, "Access denied. Please login as customer.");
             return;
         }
         
@@ -79,11 +103,20 @@ public class CustomerController extends HttpServlet {
         }
         
         switch (pathInfo) {
-            case "/update-profile":
-                handleUpdateProfile(request, response);
+            case "/cart/add":
+                handleAddToCart(request, response);
                 break;
-            case "/change-password":
-                handleChangePassword(request, response);
+            case "/cart/update":
+                handleUpdateCart(request, response);
+                break;
+            case "/cart/remove":
+                handleRemoveFromCart(request, response);
+                break;
+            case "/cart/clear":
+                handleClearCart(request, response);
+                break;
+            case "/cart/apply-promo":
+                handleApplyPromo(request, response);
                 break;
             default:
                 sendErrorResponse(response, "Invalid operation");
@@ -91,9 +124,9 @@ public class CustomerController extends HttpServlet {
     }
     
     /**
-     * Check if user is authenticated as customer
+     * Check if user is authorized (customer)
      */
-    private boolean isCustomerAuthenticated(HttpServletRequest request) {
+    private boolean isAuthorized(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         
         if (session == null) {
@@ -107,67 +140,20 @@ public class CustomerController extends HttpServlet {
     }
     
     /**
-     * Handle get profile request
+     * Get current user ID from session
      */
-    private void handleGetProfile(HttpServletRequest request, HttpServletResponse response) 
-            throws IOException {
-        
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        
-        PrintWriter out = response.getWriter();
-        
-        try {
-            HttpSession session = request.getSession();
-            String userEmail = (String) session.getAttribute("userEmail");
-            
-            if (userEmail == null) {
-                out.print("{\"success\": false, \"message\": \"Session expired\"}");
-                return;
-            }
-            
-            // Get user profile from database
-            User user = userDAO.getUserByEmail(userEmail);
-            
-            if (user == null) {
-                out.print("{\"success\": false, \"message\": \"User not found\"}");
-                return;
-            }
-            
-            // Return profile data
-            String jsonResponse = String.format(
-                "{\"success\": true, \"profile\": {" +
-                "\"id\": %d, " +
-                "\"firstName\": \"%s\", " +
-                "\"lastName\": \"%s\", " +
-                "\"email\": \"%s\", " +
-                "\"phone\": \"%s\", " +
-                "\"status\": \"%s\", " +
-                "\"fullName\": \"%s\"" +
-                "}}",
-                user.getId(),
-                escapeJsonString(user.getFirstName()),
-                escapeJsonString(user.getLastName()),
-                escapeJsonString(user.getEmail()),
-                escapeJsonString(user.getPhone()),
-                escapeJsonString(user.getStatus()),
-                escapeJsonString(user.getFullName())
-            );
-            
-            out.print(jsonResponse);
-            
-        } catch (Exception e) {
-            System.err.println("CustomerController: Error getting profile - " + e.getMessage());
-            out.print("{\"success\": false, \"message\": \"Error retrieving profile\"}");
-        } finally {
-            out.close();
+    private Integer getCurrentUserId(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            return (Integer) session.getAttribute("userId");
         }
+        return null;
     }
     
     /**
-     * Handle update profile request
+     * Handle get categories request
      */
-    private void handleUpdateProfile(HttpServletRequest request, HttpServletResponse response) 
+    private void handleGetCategories(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -176,96 +162,37 @@ public class CustomerController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            HttpSession session = request.getSession();
-            String userEmail = (String) session.getAttribute("userEmail");
-            Integer userId = (Integer) session.getAttribute("userId");
+            List<Category> categories = categoryDAO.getActiveCategories();
             
-            if (userEmail == null || userId == null) {
-                sendErrorResponse(response, "Session expired");
-                return;
-            }
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{\"success\": true, \"categories\": [");
             
-            // Get form parameters
-            String firstName = request.getParameter("firstName");
-            String lastName = request.getParameter("lastName");
-            String email = request.getParameter("email");
-            String phone = request.getParameter("phone");
-            
-            // Validate inputs
-            if (firstName == null || firstName.trim().isEmpty()) {
-                sendErrorResponse(response, "First name is required");
-                return;
-            }
-            
-            if (lastName == null || lastName.trim().isEmpty()) {
-                sendErrorResponse(response, "Last name is required");
-                return;
-            }
-            
-            if (email == null || email.trim().isEmpty()) {
-                sendErrorResponse(response, "Email is required");
-                return;
-            }
-            
-            if (phone == null || phone.trim().isEmpty()) {
-                sendErrorResponse(response, "Phone number is required");
-                return;
-            }
-            
-            // Validate phone number
-            String cleanPhone = phone.replaceAll("\\D", "");
-            if (cleanPhone.length() != 10) {
-                sendErrorResponse(response, "Please enter a valid 10-digit phone number");
-                return;
-            }
-            
-            // Get existing user
-            User existingUser = userDAO.getUserById(userId);
-            if (existingUser == null) {
-                sendErrorResponse(response, "User not found");
-                return;
-            }
-            
-            // Check if email is being changed and if it already exists
-            if (!email.equals(existingUser.getEmail())) {
-                if (userDAO.emailExistsExcluding(email, userId)) {
-                    sendErrorResponse(response, "Email address already exists");
-                    return;
-                }
-            }
-            
-            // Update user object
-            existingUser.setFirstName(firstName.trim());
-            existingUser.setLastName(lastName.trim());
-            existingUser.setEmail(email.trim());
-            existingUser.setPhone(cleanPhone);
-            
-            // Update user in database
-            if (userDAO.updateUser(existingUser)) {
-                // Update session attributes
-                session.setAttribute("userEmail", existingUser.getEmail());
-                session.setAttribute("userName", existingUser.getFullName());
-                session.setAttribute("userFirstName", existingUser.getFirstName());
-                session.setAttribute("userLastName", existingUser.getLastName());
-                session.setAttribute("userPhone", existingUser.getPhone());
+            for (int i = 0; i < categories.size(); i++) {
+                Category category = categories.get(i);
+                if (i > 0) jsonBuilder.append(",");
                 
-                sendSuccessResponse(response, "Profile updated successfully");
-            } else {
-                sendErrorResponse(response, "Failed to update profile");
+                jsonBuilder.append("{")
+                    .append("\"id\": ").append(category.getId()).append(",")
+                    .append("\"name\": \"").append(escapeJsonString(category.getName())).append("\",")
+                    .append("\"description\": \"").append(escapeJsonString(category.getDescription())).append("\"")
+                    .append("}");
             }
             
+            jsonBuilder.append("]}");
+            out.print(jsonBuilder.toString());
+            
         } catch (Exception e) {
-            System.err.println("CustomerController: Error updating profile - " + e.getMessage());
-            sendErrorResponse(response, "Error updating profile");
+            System.err.println("CustomerController: Error getting categories - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving categories\"}");
         } finally {
             out.close();
         }
     }
     
     /**
-     * Handle change password request
+     * Handle get products request
      */
-    private void handleChangePassword(HttpServletRequest request, HttpServletResponse response) 
+    private void handleGetProducts(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -274,67 +201,459 @@ public class CustomerController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            HttpSession session = request.getSession();
-            String userEmail = (String) session.getAttribute("userEmail");
+            String categoryFilter = request.getParameter("category");
+            String searchQuery = request.getParameter("search");
             
-            if (userEmail == null) {
-                sendErrorResponse(response, "Session expired");
-                return;
-            }
+            List<Item> items;
             
-            // Get form parameters
-            String currentPassword = request.getParameter("currentPassword");
-            String newPassword = request.getParameter("newPassword");
-            String confirmPassword = request.getParameter("confirmPassword");
-            
-            // Validate inputs
-            if (currentPassword == null || currentPassword.trim().isEmpty()) {
-                sendErrorResponse(response, "Current password is required");
-                return;
-            }
-            
-            if (newPassword == null || newPassword.trim().isEmpty()) {
-                sendErrorResponse(response, "New password is required");
-                return;
-            }
-            
-            if (confirmPassword == null || confirmPassword.trim().isEmpty()) {
-                sendErrorResponse(response, "Password confirmation is required");
-                return;
-            }
-            
-            // Check if new passwords match
-            if (!newPassword.equals(confirmPassword)) {
-                sendErrorResponse(response, "New passwords do not match");
-                return;
-            }
-            
-            // Validate new password strength
-            if (newPassword.length() < 6) {
-                sendErrorResponse(response, "New password must be at least 6 characters long");
-                return;
-            }
-            
-            // Verify current password
-            User user = userDAO.validateLogin(userEmail, currentPassword);
-            if (user == null) {
-                sendErrorResponse(response, "Current password is incorrect");
-                return;
-            }
-            
-            // Update password
-            if (userDAO.updatePassword(userEmail, newPassword)) {
-                sendSuccessResponse(response, "Password changed successfully");
+            if (searchQuery != null && !searchQuery.trim().isEmpty()) {
+                items = itemDAO.searchItems(searchQuery.trim());
+            } else if (categoryFilter != null && !categoryFilter.trim().isEmpty()) {
+                int categoryId = Integer.parseInt(categoryFilter);
+                items = itemDAO.getItemsByCategory(categoryId);
             } else {
-                sendErrorResponse(response, "Failed to change password");
+                items = itemDAO.getActiveItems();
             }
+            
+            out.print(buildItemsJsonResponse(items));
             
         } catch (Exception e) {
-            System.err.println("CustomerController: Error changing password - " + e.getMessage());
-            sendErrorResponse(response, "Error changing password");
+            System.err.println("CustomerController: Error getting products - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving products\"}");
         } finally {
             out.close();
         }
+    }
+    
+    /**
+     * Handle get recent products request
+     */
+    private void handleGetRecentProducts(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String limitStr = request.getParameter("limit");
+            int limit = limitStr != null ? Integer.parseInt(limitStr) : 8;
+            
+            List<Item> items = itemDAO.getRecentItems(limit);
+            out.print(buildItemsJsonResponse(items, "products"));
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error getting recent products - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving recent products\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle get featured products request
+     */
+    private void handleGetFeaturedProducts(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String limitStr = request.getParameter("limit");
+            int limit = limitStr != null ? Integer.parseInt(limitStr) : 6;
+            
+            // For demo, return items with offers as featured
+            List<Item> items = itemDAO.getFeaturedItems(limit);
+            out.print(buildItemsJsonResponse(items, "products"));
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error getting featured products - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving featured products\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle add to cart request
+     */
+    private void handleAddToCart(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            String productIdStr = request.getParameter("productId");
+            String quantityStr = request.getParameter("quantity");
+            
+            if (productIdStr == null || quantityStr == null) {
+                sendErrorResponse(response, "Product ID and quantity are required");
+                return;
+            }
+            
+            int productId = Integer.parseInt(productIdStr);
+            int quantity = Integer.parseInt(quantityStr);
+            
+            if (quantity <= 0) {
+                sendErrorResponse(response, "Quantity must be greater than 0");
+                return;
+            }
+            
+            // Check if product exists and is active
+            Item item = itemDAO.getItemById(productId);
+            if (item == null || !item.isActive()) {
+                sendErrorResponse(response, "Product not found or not available");
+                return;
+            }
+            
+            // Check stock
+            if (item.getStock() < quantity) {
+                sendErrorResponse(response, "Insufficient stock. Only " + item.getStock() + " items available");
+                return;
+            }
+            
+            // Add to cart
+            if (cartDAO.addToCart(userId, productId, quantity)) {
+                sendSuccessResponse(response, "Product added to cart successfully");
+            } else {
+                sendErrorResponse(response, "Failed to add product to cart");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid number format");
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error adding to cart - " + e.getMessage());
+            sendErrorResponse(response, "Error adding product to cart");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle get cart items request
+     */
+    private void handleGetCartItems(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            List<Cart> cartItems = cartDAO.getCartItems(userId);
+            
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{\"success\": true, \"items\": [");
+            
+            for (int i = 0; i < cartItems.size(); i++) {
+                Cart cartItem = cartItems.get(i);
+                if (i > 0) jsonBuilder.append(",");
+                
+                jsonBuilder.append("{")
+                    .append("\"id\": ").append(cartItem.getId()).append(",")
+                    .append("\"productId\": ").append(cartItem.getItemId()).append(",")
+                    .append("\"title\": \"").append(escapeJsonString(cartItem.getItemTitle())).append("\",")
+                    .append("\"author\": \"").append(escapeJsonString(cartItem.getItemAuthor())).append("\",")
+                    .append("\"price\": ").append(cartItem.getEffectivePrice()).append(",")
+                    .append("\"originalPrice\": ").append(cartItem.getOriginalPrice() != null ? cartItem.getOriginalPrice() : "null").append(",")
+                    .append("\"quantity\": ").append(cartItem.getQuantity()).append(",")
+                    .append("\"imagePath\": \"").append(escapeJsonString(cartItem.getItemImagePath())).append("\",")
+                    .append("\"stock\": ").append(cartItem.getItemStock())
+                    .append("}");
+            }
+            
+            jsonBuilder.append("]}");
+            out.print(jsonBuilder.toString());
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error getting cart items - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving cart items\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle get cart count request
+     */
+    private void handleGetCartCount(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                out.print("{\"success\": true, \"count\": 0}");
+                return;
+            }
+            
+            int count = cartDAO.getCartItemCount(userId);
+            out.print("{\"success\": true, \"count\": " + count + "}");
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error getting cart count - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving cart count\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle update cart request
+     */
+    private void handleUpdateCart(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            String cartItemIdStr = request.getParameter("cartItemId");
+            String quantityStr = request.getParameter("quantity");
+            
+            if (cartItemIdStr == null || quantityStr == null) {
+                sendErrorResponse(response, "Cart item ID and quantity are required");
+                return;
+            }
+            
+            int cartItemId = Integer.parseInt(cartItemIdStr);
+            int quantity = Integer.parseInt(quantityStr);
+            
+            if (quantity <= 0) {
+                sendErrorResponse(response, "Quantity must be greater than 0");
+                return;
+            }
+            
+            // Verify cart item belongs to user
+            Cart cartItem = cartDAO.getCartItemById(cartItemId);
+            if (cartItem == null || !cartItem.getUserId().equals(userId)) {
+                sendErrorResponse(response, "Cart item not found");
+                return;
+            }
+            
+            // Check stock
+            Item item = itemDAO.getItemById(cartItem.getItemId());
+            if (item == null || item.getStock() < quantity) {
+                sendErrorResponse(response, "Insufficient stock");
+                return;
+            }
+            
+            // Update cart
+            if (cartDAO.updateCartItemQuantity(cartItemId, quantity)) {
+                sendSuccessResponse(response, "Cart updated successfully");
+            } else {
+                sendErrorResponse(response, "Failed to update cart");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid number format");
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error updating cart - " + e.getMessage());
+            sendErrorResponse(response, "Error updating cart");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle remove from cart request
+     */
+    private void handleRemoveFromCart(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            String cartItemIdStr = request.getParameter("cartItemId");
+            
+            if (cartItemIdStr == null) {
+                sendErrorResponse(response, "Cart item ID is required");
+                return;
+            }
+            
+            int cartItemId = Integer.parseInt(cartItemIdStr);
+            
+            // Verify cart item belongs to user
+            Cart cartItem = cartDAO.getCartItemById(cartItemId);
+            if (cartItem == null || !cartItem.getUserId().equals(userId)) {
+                sendErrorResponse(response, "Cart item not found");
+                return;
+            }
+            
+            // Remove from cart
+            if (cartDAO.removeFromCart(cartItemId)) {
+                sendSuccessResponse(response, "Item removed from cart successfully");
+            } else {
+                sendErrorResponse(response, "Failed to remove item from cart");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid cart item ID");
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error removing from cart - " + e.getMessage());
+            sendErrorResponse(response, "Error removing item from cart");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle clear cart request
+     */
+    private void handleClearCart(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            // Clear cart
+            if (cartDAO.clearCart(userId)) {
+                sendSuccessResponse(response, "Cart cleared successfully");
+            } else {
+                sendErrorResponse(response, "Failed to clear cart");
+            }
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error clearing cart - " + e.getMessage());
+            sendErrorResponse(response, "Error clearing cart");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle apply promo code request
+     */
+    private void handleApplyPromo(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String promoCode = request.getParameter("promoCode");
+            
+            if (promoCode == null || promoCode.trim().isEmpty()) {
+                sendErrorResponse(response, "Promo code is required");
+                return;
+            }
+            
+            // Demo promo codes
+            double discount = 0;
+            String message = "";
+            
+            switch (promoCode.toUpperCase()) {
+                case "SAVE10":
+                    discount = 0.10; // 10% discount
+                    message = "10% discount applied";
+                    break;
+                case "SAVE20":
+                    discount = 0.20; // 20% discount
+                    message = "20% discount applied";
+                    break;
+                case "FREESHIP":
+                    discount = 250; // Free shipping (Rs. 250)
+                    message = "Free shipping applied";
+                    break;
+                default:
+                    sendErrorResponse(response, "Invalid promo code");
+                    return;
+            }
+            
+            out.print("{\"success\": true, \"message\": \"" + message + "\", \"discount\": " + discount + "}");
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error applying promo - " + e.getMessage());
+            sendErrorResponse(response, "Error applying promo code");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Build JSON response for items
+     */
+    private String buildItemsJsonResponse(List<Item> items) {
+        return buildItemsJsonResponse(items, "items");
+    }
+    
+    private String buildItemsJsonResponse(List<Item> items, String arrayName) {
+        StringBuilder jsonBuilder = new StringBuilder();
+        jsonBuilder.append("{\"success\": true, \"").append(arrayName).append("\": [");
+        
+        for (int i = 0; i < items.size(); i++) {
+            Item item = items.get(i);
+            if (i > 0) jsonBuilder.append(",");
+            
+            jsonBuilder.append("{")
+                .append("\"id\": ").append(item.getId()).append(",")
+                .append("\"title\": \"").append(escapeJsonString(item.getTitle())).append("\",")
+                .append("\"author\": \"").append(escapeJsonString(item.getAuthor())).append("\",")
+                .append("\"categoryId\": ").append(item.getCategoryId()).append(",")
+                .append("\"categoryName\": \"").append(escapeJsonString(item.getCategoryName())).append("\",")
+                .append("\"price\": ").append(item.getPrice()).append(",")
+                .append("\"offerPrice\": ").append(item.getOfferPrice() != null ? item.getOfferPrice() : "null").append(",")
+                .append("\"stock\": ").append(item.getStock()).append(",")
+                .append("\"description\": \"").append(escapeJsonString(item.getDescription())).append("\",")
+                .append("\"imagePath\": \"").append(escapeJsonString(item.getImagePath())).append("\",")
+                .append("\"status\": \"").append(escapeJsonString(item.getStatus())).append("\"")
+                .append("}");
+        }
+        
+        jsonBuilder.append("]}");
+        return jsonBuilder.toString();
     }
     
     /**
@@ -387,7 +706,9 @@ public class CustomerController extends HttpServlet {
     @Override
     public void destroy() {
         System.out.println("CustomerController: Controller being destroyed");
-        userDAO = null;
+        itemDAO = null;
+        categoryDAO = null;
+        cartDAO = null;
         super.destroy();
     }
 }

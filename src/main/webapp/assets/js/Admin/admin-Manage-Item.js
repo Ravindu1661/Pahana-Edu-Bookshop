@@ -439,12 +439,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.style.display = 'none';
     }
     
+    // Updated loadCategoriesTable function - REMOVED ITEM COUNT COLUMN
     function loadCategoriesTable() {
         const tbody = document.getElementById('categoriesTableBody');
         if (!tbody) return;
         
         if (currentCategories.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">No categories found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="loading">No categories found</td></tr>';
             return;
         }
         
@@ -453,7 +454,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${cat.id}</td>
                 <td>${cat.name}</td>
                 <td>${cat.description || 'No description'}</td>
-                <td>0</td>
                 <td><span class="badge status-active">Active</span></td>
                 <td>
                     <button onclick="editCategory(${cat.id})" class="action-btn edit-btn" title="Edit Category">
@@ -471,6 +471,9 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('➕ Opening add category modal');
         editCategory = null;
         
+        // Close the categories list modal first
+        closeCategoriesListModal();
+        
         const modal = document.getElementById('categoryModal');
         const form = document.getElementById('categoryForm');
         const modalTitle = document.getElementById('categoryModalTitle');
@@ -482,8 +485,11 @@ document.addEventListener('DOMContentLoaded', () => {
             modalTitle.textContent = 'Add New Category';
             if (statusGroup) statusGroup.style.display = 'none';
             
-            modal.style.display = 'block';
-            document.getElementById('categoryName')?.focus();
+            // Add a small delay to ensure smooth transition
+            setTimeout(() => {
+                modal.style.display = 'block';
+                document.getElementById('categoryName')?.focus();
+            }, 100);
         }
     }
     
@@ -491,6 +497,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('categoryModal');
         if (modal) modal.style.display = 'none';
         editCategory = null;
+        
+        // Reopen categories list modal after closing add/edit modal
+        setTimeout(() => {
+            openCategoriesListModal();
+        }, 100);
     }
     
     function editCategoryFunc(id) {
@@ -501,6 +512,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('Category not found', 'error');
             return;
         }
+        
+        // Close the categories list modal first
+        closeCategoriesListModal();
         
         const modal = document.getElementById('categoryModal');
         const modalTitle = document.getElementById('categoryModalTitle');
@@ -514,8 +528,11 @@ document.addEventListener('DOMContentLoaded', () => {
             modalTitle.textContent = 'Edit Category';
             if (statusGroup) statusGroup.style.display = 'block';
             
-            modal.style.display = 'block';
-            document.getElementById('categoryName')?.focus();
+            // Add a small delay to ensure smooth transition
+            setTimeout(() => {
+                modal.style.display = 'block';
+                document.getElementById('categoryName')?.focus();
+            }, 100);
         }
     }
     
@@ -564,9 +581,20 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             if (data.success) {
                 showToast(data.message, 'success');
-                closeCategoryModal();
+                
+                // Close category modal
+                const modal = document.getElementById('categoryModal');
+                if (modal) modal.style.display = 'none';
+                editCategory = null;
+                
+                // Reload categories and stats
                 loadCategories();
                 loadItemStats();
+                
+                // Reopen categories list modal after successful save
+                setTimeout(() => {
+                    openCategoriesListModal();
+                }, 200);
             } else {
                 showToast(data.message, 'error');
             }

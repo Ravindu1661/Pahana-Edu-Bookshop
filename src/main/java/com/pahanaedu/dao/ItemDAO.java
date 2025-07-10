@@ -66,6 +66,32 @@ public class ItemDAO {
     private static final String GET_NEXT_REFERENCE_NUMBER = 
         "SELECT COUNT(*) + 1 FROM items";
     
+    // Customer-specific queries
+    private static final String SELECT_ACTIVE_ITEMS = 
+        "SELECT i.*, c.name as category_name FROM items i " +
+        "LEFT JOIN categories c ON i.category_id = c.id " +
+        "WHERE i.status = 'active' ORDER BY i.created_at DESC";
+    
+    private static final String SEARCH_ITEMS = 
+        "SELECT i.*, c.name as category_name FROM items i " +
+        "LEFT JOIN categories c ON i.category_id = c.id " +
+        "WHERE i.status = 'active' AND (i.title LIKE ? OR i.author LIKE ?) " +
+        "ORDER BY i.created_at DESC";
+    
+    private static final String SELECT_RECENT_ITEMS = 
+        "SELECT i.*, c.name as category_name FROM items i " +
+        "LEFT JOIN categories c ON i.category_id = c.id " +
+        "WHERE i.status = 'active' " +
+        "ORDER BY i.created_at DESC " +
+        "LIMIT ?";
+    
+    private static final String SELECT_FEATURED_ITEMS = 
+        "SELECT i.*, c.name as category_name FROM items i " +
+        "LEFT JOIN categories c ON i.category_id = c.id " +
+        "WHERE i.status = 'active' AND i.offer_price IS NOT NULL AND i.offer_price > 0 " +
+        "ORDER BY i.created_at DESC " +
+        "LIMIT ?";
+    
     /**
      * Generate unique reference number
      */
@@ -367,6 +393,106 @@ public class ItemDAO {
         }
         
         return 0;
+    }
+    
+    // ==================== CUSTOMER METHODS ====================
+    
+    /**
+     * Get active items only (for customer view)
+     */
+    public List<Item> getActiveItems() {
+        List<Item> items = new ArrayList<>();
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_ACTIVE_ITEMS)) {
+            
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                items.add(extractItemFromResultSet(resultSet));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error getting active items - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return items;
+    }
+    
+    /**
+     * Search items by title or author
+     */
+    public List<Item> searchItems(String searchQuery) {
+        List<Item> items = new ArrayList<>();
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SEARCH_ITEMS)) {
+            
+            String searchPattern = "%" + searchQuery + "%";
+            statement.setString(1, searchPattern);
+            statement.setString(2, searchPattern);
+            
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                items.add(extractItemFromResultSet(resultSet));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error searching items - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return items;
+    }
+    
+    /**
+     * Get recent items (newest first)
+     */
+    public List<Item> getRecentItems(int limit) {
+        List<Item> items = new ArrayList<>();
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_RECENT_ITEMS)) {
+            
+            statement.setInt(1, limit);
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                items.add(extractItemFromResultSet(resultSet));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error getting recent items - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return items;
+    }
+    
+    /**
+     * Get featured items (items with offers)
+     */
+    public List<Item> getFeaturedItems(int limit) {
+        List<Item> items = new ArrayList<>();
+        
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_FEATURED_ITEMS)) {
+            
+            statement.setInt(1, limit);
+            ResultSet resultSet = statement.executeQuery();
+            
+            while (resultSet.next()) {
+                items.add(extractItemFromResultSet(resultSet));
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("ItemDAO: Error getting featured items - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return items;
     }
     
     /**

@@ -15,8 +15,9 @@ if (session.getAttribute("user") == null ||
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pahana Edu - Online Bookstore</title>
+    <title>Shopping Cart - Pahana Edu</title>
     <link rel="stylesheet" href="assets/css/customer-style.css">
+    <link rel="stylesheet" href="assets/css/cart.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -28,7 +29,7 @@ if (session.getAttribute("user") == null ||
             </div>
             
             <div class="nav-menu">
-                <a href="customer-dashboard.jsp" class="nav-link active">Home</a>
+                <a href="customer-dashboard.jsp" class="nav-link">Home</a>
                 <a href="products.jsp" class="nav-link">Products</a>
                 <a href="about.jsp" class="nav-link">About</a>
                 <a href="contact.jsp" class="nav-link">Contact</a>
@@ -40,7 +41,7 @@ if (session.getAttribute("user") == null ||
                     <button id="searchBtn"><i class="fas fa-search"></i></button>
                 </div>
                 
-                <div class="cart-icon" onclick="openCart()">
+                <div class="cart-icon active">
                     <i class="fas fa-shopping-cart"></i>
                     <span class="cart-count" id="cartCount">0</span>
                 </div>
@@ -60,78 +61,97 @@ if (session.getAttribute("user") == null ||
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="hero-container">
-            <div class="hero-content">
-                <h1>Discover Your Next Great Read</h1>
-                <p>Explore thousands of books across all genres. From fiction to education, find your perfect book today.</p>
-                <div class="hero-buttons">
-                    <a href="products.jsp" class="btn btn-primary">Browse Books</a>
-                    <a href="#recent-products" class="btn btn-secondary">View Latest</a>
-                </div>
-            </div>
-            <div class="hero-image">
-                <img src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" alt="Books">
-            </div>
-        </div>
-    </section>
-
-    <!-- Categories Section -->
-    <section class="categories">
+    <!-- Page Header -->
+    <div class="page-header">
         <div class="container">
-            <h2>Browse by Category</h2>
-            <div class="categories-grid" id="categoriesGrid">
-                <!-- Categories will be loaded here by JavaScript -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Recent Products Section -->
-    <section class="recent-products" id="recent-products">
-        <div class="container">
-            <h2>Recent Arrivals</h2>
-            <div class="products-grid" id="recentProductsGrid">
-                <!-- Recent products will be loaded here by JavaScript -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Featured Products Section -->
-    <section class="featured-products">
-        <div class="container">
-            <h2>Featured Books</h2>
-            <div class="products-grid" id="featuredProductsGrid">
-                <!-- Featured products will be loaded here by JavaScript -->
-            </div>
-        </div>
-    </section>
-
-    <!-- Cart Sidebar -->
-    <div class="cart-sidebar" id="cartSidebar">
-        <div class="cart-header">
-            <h3>Shopping Cart</h3>
-            <button class="close-cart" onclick="closeCart()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <div class="cart-items" id="cartItems">
-            <!-- Cart items will be loaded here -->
-        </div>
-        
-        <div class="cart-footer">
-            <div class="cart-total">
-                <strong>Total: Rs. <span id="cartTotal">0.00</span></strong>
-            </div>
-            <button class="btn btn-primary cart-checkout" onclick="goToCheckout()">
-                Proceed to Checkout
-            </button>
+            <h1>Shopping Cart</h1>
+            <p>Review your selected items</p>
         </div>
     </div>
 
-    <!-- Cart Overlay -->
-    <div class="cart-overlay" id="cartOverlay" onclick="closeCart()"></div>
+    <!-- Cart Section -->
+    <section class="cart-section">
+        <div class="container">
+            <div class="cart-layout">
+                <!-- Cart Items -->
+                <div class="cart-main">
+                    <div class="cart-header-row">
+                        <h2>Your Items</h2>
+                        <button class="btn btn-secondary clear-cart" onclick="clearCart()">
+                            <i class="fas fa-trash"></i> Clear Cart
+                        </button>
+                    </div>
+                    
+                    <div class="cart-items-container" id="cartItemsContainer">
+                        <!-- Cart items will be loaded here -->
+                    </div>
+                    
+                    <div class="cart-actions">
+                        <a href="products.jsp" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Continue Shopping
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Cart Summary -->
+                <div class="cart-summary">
+                    <h3>Order Summary</h3>
+                    
+                    <div class="summary-row">
+                        <span>Subtotal:</span>
+                        <span id="subtotal">Rs. 0.00</span>
+                    </div>
+                    
+                    <div class="summary-row">
+                        <span>Shipping:</span>
+                        <span id="shipping">Rs. 250.00</span>
+                    </div>
+                    
+                    <div class="summary-row discount">
+                        <span>Discount:</span>
+                        <span id="discount">Rs. 0.00</span>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="summary-row total">
+                        <strong>
+                            <span>Total:</span>
+                            <span id="total">Rs. 0.00</span>
+                        </strong>
+                    </div>
+                    
+                    <div class="promo-code">
+                        <input type="text" id="promoInput" placeholder="Enter promo code">
+                        <button class="btn btn-secondary" onclick="applyPromoCode()">Apply</button>
+                    </div>
+                    
+                    <button class="btn btn-primary checkout-btn" onclick="proceedToCheckout()">
+                        <i class="fas fa-lock"></i> Proceed to Checkout
+                    </button>
+                    
+                    <div class="security-info">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Secure checkout with SSL encryption</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Empty Cart State -->
+    <div class="empty-cart" id="emptyCartState" style="display: none;">
+        <div class="container">
+            <div class="empty-cart-content">
+                <i class="fas fa-shopping-cart"></i>
+                <h2>Your cart is empty</h2>
+                <p>Looks like you haven't added any books to your cart yet.</p>
+                <a href="products.jsp" class="btn btn-primary">
+                    <i class="fas fa-book"></i> Browse Books
+                </a>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="footer">
@@ -140,12 +160,6 @@ if (session.getAttribute("user") == null ||
                 <div class="footer-section">
                     <h3>📚 Pahana Edu</h3>
                     <p>Your trusted online bookstore for all educational and recreational reading needs.</p>
-                    <div class="social-links">
-                        <a href="#"><i class="fab fa-facebook"></i></a>
-                        <a href="#"><i class="fab fa-twitter"></i></a>
-                        <a href="#"><i class="fab fa-instagram"></i></a>
-                        <a href="#"><i class="fab fa-linkedin"></i></a>
-                    </div>
                 </div>
                 
                 <div class="footer-section">
@@ -159,16 +173,6 @@ if (session.getAttribute("user") == null ||
                 </div>
                 
                 <div class="footer-section">
-                    <h4>Customer Service</h4>
-                    <ul>
-                        <li><a href="#">Help Center</a></li>
-                        <li><a href="#">Shipping Info</a></li>
-                        <li><a href="#">Returns</a></li>
-                        <li><a href="#">Track Order</a></li>
-                    </ul>
-                </div>
-                
-                <div class="footer-section">
                     <h4>Contact Info</h4>
                     <ul>
                         <li><i class="fas fa-phone"></i> +94 11 234 5678</li>
@@ -176,10 +180,6 @@ if (session.getAttribute("user") == null ||
                         <li><i class="fas fa-map-marker-alt"></i> Colombo, Sri Lanka</li>
                     </ul>
                 </div>
-            </div>
-            
-            <div class="footer-bottom">
-                <p>&copy; 2024 Pahana Edu. All rights reserved.</p>
             </div>
         </div>
     </footer>
@@ -198,5 +198,6 @@ if (session.getAttribute("user") == null ||
     </div>
 
     <script src="assets/js/customer-dashboard.js"></script>
+    <script src="assets/js/cart.js"></script>
 </body>
 </html>

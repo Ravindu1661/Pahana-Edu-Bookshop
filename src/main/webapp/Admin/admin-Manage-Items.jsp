@@ -30,13 +30,13 @@
                 <span id="activeItems" class="stat-number">0</span>
             </div>
         </div>
-        <div class="stat-card">
+        <!--   <div class="stat-card">
             <div class="stat-icon">❌</div>
             <div class="stat-info">
                 <h3>Inactive Items</h3>
                 <span id="inactiveItems" class="stat-number">0</span>
             </div>
-        </div>
+        </div> -->
         <div class="stat-card">
             <div class="stat-icon">📦</div>
             <div class="stat-info">
@@ -271,7 +271,6 @@
                             <th>ID</th>
                             <th>Name</th>
                             <th>Description</th>
-                            <th>Items Count</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
