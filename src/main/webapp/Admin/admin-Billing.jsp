@@ -7,110 +7,108 @@
         return;
     }
 %>
-<div class="billing-container">
-    <div class="page-header">
+
+<div class="container">
+    <!-- Page Header -->
+    <div class="billing-header">
         <h2>💳 Order & Billing Management</h2>
-        <button class="btn btn-primary" id="refreshOrdersBtn">
-            <i class="icon-refresh"></i> Refresh Orders
-        </button>
     </div>
     
-    <!-- Order Statistics -->
-    <div class="stats-section">
+    <!-- Statistics Cards -->
+    <div class="stats-container">
         <div class="stat-card">
-            <div class="stat-icon">📦</div>
-            <div class="stat-info">
-                <h3>Total Orders</h3>
-                <span id="totalOrders" class="stat-number">0</span>
-            </div>
+            <span class="stat-icon">📦</span>
+            <h4>Total Orders</h4>
+            <span id="totalOrders" class="stat-number">0</span>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">⏳</div>
-            <div class="stat-info">
-                <h3>Pending Orders</h3>
-                <span id="pendingOrders" class="stat-number">0</span>
-            </div>
+            <span class="stat-icon">⏳</span>
+            <h4>Pending Orders</h4>
+            <span id="pendingOrders" class="stat-number">0</span>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">✅</div>
-            <div class="stat-info">
-                <h3>Confirmed Orders</h3>
-                <span id="confirmedOrders" class="stat-number">0</span>
-            </div>
+            <span class="stat-icon">✅</span>
+            <h4>Confirmed Orders</h4>
+            <span id="confirmedOrders" class="stat-number">0</span>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">🚚</div>
-            <div class="stat-info">
-                <h3>Shipped Orders</h3>
-                <span id="shippedOrders" class="stat-number">0</span>
-            </div>
+            <span class="stat-icon">🚚</span>
+            <h4>Shipped Orders</h4>
+            <span id="shippedOrders" class="stat-number">0</span>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">💰</div>
-            <div class="stat-info">
-                <h3>Total Revenue</h3>
-                <span id="totalRevenue" class="stat-number">Rs. 0</span>
-            </div>
+            <span class="stat-icon">📋</span>
+            <h4>Delivered Orders</h4>
+            <span id="deliveredOrders" class="stat-number">0</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-icon">💰</span>
+            <h4>Total Revenue</h4>
+            <span id="totalRevenue" class="stat-number">Rs. 0</span>
         </div>
     </div>
 
-    <!-- Filter Section -->
-    <div class="filter-section">
-        <div class="filter-group">
-            <label for="statusFilter">Filter by Status:</label>
-            <select id="statusFilter" onchange="filterOrders()">
-                <option value="">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-            </select>
+    <!-- Controls Section -->
+    <div class="controls-section">
+        <div class="filter-controls">
+            <div class="filter-group">
+                <label for="statusFilter">Status:</label>
+                <select id="statusFilter">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="shipped">Shipped</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="paymentFilter">Payment:</label>
+                <select id="paymentFilter">
+                    <option value="">All Payments</option>
+                    <option value="cod">Cash on Delivery</option>
+                    <option value="online">Online Payment</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="dateFilter">Date:</label>
+                <select id="dateFilter">
+                    <option value="">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                </select>
+            </div>
         </div>
         
-        <div class="filter-group">
-            <label for="paymentFilter">Filter by Payment:</label>
-            <select id="paymentFilter" onchange="filterOrders()">
-                <option value="">All Payments</option>
-                <option value="cod">Cash on Delivery</option>
-                <option value="online">Online Payment</option>
-            </select>
-        </div>
-        
-        <div class="filter-group">
-            <label for="dateFilter">Filter by Date:</label>
-            <select id="dateFilter" onchange="filterOrders()">
-                <option value="">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-            </select>
-        </div>
-        
-        <button class="btn btn-secondary" onclick="loadOrders()">
-            <i class="icon-refresh"></i> Refresh
+        <button class="refresh-btn" id="refreshOrdersBtn">
+            <i class="fas fa-sync"></i> Refresh
         </button>
     </div>
 
     <!-- Orders Table -->
     <div class="table-container">
-        <table id="ordersTable">
+        <table class="orders-table">
             <thead>
                 <tr>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Contact</th>
-                    <th>Items</th>
-                    <th>Total Amount</th>
-                    <th>Payment Method</th>
-                    <th>Status</th>
-                    <th>Order Date</th>
-                    <th>Actions</th>
+                    <th>ORDER ID</th>
+                    <th>CUSTOMER</th>
+                    <th>ITEMS</th>
+                    <th>TOTAL AMOUNT</th>
+                    <th>PAYMENT METHOD</th>
+                    <th>STATUS</th>
+                    <th>ORDER DATE</th>
+                    <th>ACTIONS</th>
                 </tr>
             </thead>
             <tbody id="ordersTableBody">
                 <tr>
-                    <td colspan="9" class="loading">Loading orders...</td>
+                    <td colspan="8" class="loading">
+                        <div class="loading-spinner"></div>
+                        Loading orders...
+                    </td>
                 </tr>
             </tbody>
         </table>
@@ -119,56 +117,55 @@
 
 <!-- Order Details Modal -->
 <div id="orderDetailsModal" class="modal">
-    <div class="modal-content modal-lg">
+    <div class="modal-content">
         <div class="modal-header">
-            <h3 id="orderModalTitle">Order Details</h3>
+            <h3 id="modalTitle">Order Details</h3>
             <button class="modal-close" onclick="closeOrderModal()">×</button>
         </div>
         
         <div class="modal-body">
-            <div class="order-info-section">
-                <div class="order-basic-info">
+            <div class="order-details">
+                <!-- Order Information -->
+                <div class="detail-section">
                     <h4>📋 Order Information</h4>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <label>Order ID:</label>
-                            <span id="detailOrderId">-</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Customer:</label>
-                            <span id="detailCustomerName">-</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Email:</label>
-                            <span id="detailCustomerEmail">-</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Contact:</label>
-                            <span id="detailContactNumber">-</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Payment Method:</label>
-                            <span id="detailPaymentMethod">-</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Order Date:</label>
-                            <span id="detailOrderDate">-</span>
-                        </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Order ID:</span>
+                        <span class="detail-value" id="detailOrderId">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Customer:</span>
+                        <span class="detail-value" id="detailCustomerName">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Email:</span>
+                        <span class="detail-value" id="detailCustomerEmail">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Contact:</span>
+                        <span class="detail-value" id="detailContactNumber">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Payment Method:</span>
+                        <span class="detail-value" id="detailPaymentMethod">-</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Order Date:</span>
+                        <span class="detail-value" id="detailOrderDate">-</span>
                     </div>
                 </div>
                 
-                <div class="shipping-info">
+                <!-- Shipping Information -->
+                <div class="detail-section">
                     <h4>🚚 Shipping Information</h4>
-                    <div class="info-item full-width">
-                        <label>Shipping Address:</label>
-                        <p id="detailShippingAddress">-</p>
+                    <div class="detail-row">
+                        <span class="detail-label">Address:</span>
+                        <span class="detail-value" id="detailShippingAddress">-</span>
                     </div>
                 </div>
-            </div>
-            
-            <div class="order-items-section">
-                <h4>📦 Order Items</h4>
-                <div class="items-table-container">
+                
+                <!-- Order Items -->
+                <div class="detail-section">
+                    <h4>📦 Order Items</h4>
                     <table class="items-table">
                         <thead>
                             <tr>
@@ -184,21 +181,19 @@
                             </tr>
                         </tbody>
                     </table>
-                </div>
-                
-                <div class="order-total">
-                    <div class="total-row">
-                        <span class="total-label">Total Amount:</span>
-                        <span class="total-amount" id="detailTotalAmount">Rs. 0.00</span>
+                    
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #3498db; text-align: right;">
+                        <strong style="font-size: 1.1rem; color: #27ae60;">
+                            Total Amount: <span id="detailTotalAmount">Rs. 0.00</span>
+                        </strong>
                     </div>
                 </div>
-            </div>
-            
-            <div class="status-management-section">
-                <h4>⚙️ Status Management</h4>
-                <div class="status-controls">
-                    <div class="form-group">
-                        <label for="newOrderStatus">Update Status:</label>
+                
+                <!-- Status Management -->
+                <div class="detail-section">
+                    <h4>⚙️ Status Management</h4>
+                    <div class="status-controls">
+                        <label for="newOrderStatus" style="font-weight: 500;">Update Status:</label>
                         <select id="newOrderStatus">
                             <option value="pending">Pending</option>
                             <option value="confirmed">Confirmed</option>
@@ -206,28 +201,30 @@
                             <option value="delivered">Delivered</option>
                             <option value="cancelled">Cancelled</option>
                         </select>
+                        <button class="btn-update" onclick="updateOrderStatus()">
+                            Update Status
+                        </button>
                     </div>
-                    <button class="btn btn-primary" onclick="updateOrderStatus()">
-                        <i class="icon-save"></i> Update Status
-                    </button>
                 </div>
             </div>
         </div>
         
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">Close</button>
+            <button type="button" class="btn btn-view" onclick="closeOrderModal()">Close</button>
         </div>
     </div>
 </div>
 
-<!-- Message Toast -->
-<div id="messageToast" class="toast">
+<!-- Toast Notification -->
+<div id="toast" class="toast">
     <div class="toast-content">
         <span id="toastMessage"></span>
         <button class="toast-close" onclick="hideToast()">×</button>
     </div>
 </div>
 
-<!-- Include CSS and JS -->
+<!-- Include FontAwesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<!-- Include CSS -->
 <link rel="stylesheet" href="assets/css/Admin/admin-Billing.css">
-<script src="assets/js/Admin/admin-Billing.js"></script>

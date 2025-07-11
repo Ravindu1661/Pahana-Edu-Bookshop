@@ -1,102 +1,22 @@
-// Global variables for order management
+// Dashboard Content-Area Compatible Admin Billing Management JavaScript
 let currentOrders = [];
 let currentOrderDetails = null;
-let currentPage = null;
+let billingInitialized = false;
 
 // Get context path and base URL
 const contextPath = window.location.pathname.split('/')[1];
 const baseUrl = '/' + contextPath;
 
-console.log('💳 Admin Billing Management initialized');
-
-// Initialize billing management on DOM load
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Admin Billing Dashboard loaded');
-    
-    const navLinks = document.querySelectorAll('.nav-link');
-    const contentArea = document.getElementById('content-area');
-    
-    // Navigation handling
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            
-            // If it's logout link, redirect immediately
-            if (link.classList.contains('logout')) {
-                window.location.href = link.getAttribute('href');
-                return;
-            }
-            
-            // Update active class
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-            
-            // Load new page via AJAX
-            const page = link.getAttribute('data-page');
-            if (page) {
-                loadPage(page);
-            }
-        });
-    });
-    
-    // Load default tab
-    setTimeout(() => {
-        const defaultLink = document.querySelector('.nav-link[data-page*="admin-Manage-Billing.jsp"]');
-        if (defaultLink) {
-            console.log('🏠 Loading default page...');
-            defaultLink.click();
-        }
-    }, 100);
-});
+console.log('💳 Admin Billing Management script loaded');
 
 /**
- * Enhanced page loading function
+ * Reset initialization flag when navigating away
  */
-function loadPage(page) {
-    console.log('📄 Loading page:', page);
-    currentPage = page;
-    
-    // Show loading indicator
-    showLoadingIndicator();
-    
-    fetch(page)
-        .then(response => {
-            console.log('📡 Page response status:', response.status);
-            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            return response.text();
-        })
-        .then(data => {
-            console.log('✅ Page loaded successfully');
-            const contentArea = document.getElementById('content-area');
-            contentArea.innerHTML = data;
-            
-            // Initialize billing management
-            initializeBillingManagement();
-        })
-        .catch(error => {
-            console.error('❌ Page loading error:', error);
-            contentArea.innerHTML = `
-                <div class="error-container">
-                    <h3>❌ Error Loading Content</h3>
-                    <p>Failed to load: ${page}</p>
-                    <p>Error: ${error.message}</p>
-                    <button onclick="location.reload()" class="btn btn-primary">🔄 Retry</button>
-                </div>
-            `;
-        });
-}
-
-/**
- * Show loading indicator
- */
-function showLoadingIndicator() {
-    const contentArea = document.getElementById('content-area');
-    contentArea.innerHTML = `
-        <div class="loading-container">
-            <div class="loading-spinner"></div>
-            <p>Loading content...</p>
-        </div>
-    `;
+function resetBillingInitialization() {
+    billingInitialized = false;
+    currentOrders = [];
+    currentOrderDetails = null;
+    console.log('🔄 Billing initialization reset');
 }
 
 /**
@@ -105,45 +25,41 @@ function showLoadingIndicator() {
 function initializeBillingManagement() {
     console.log('🔧 Initializing billing management...');
     
-    const statsElements = {
-        totalOrders: document.getElementById('totalOrders'),
-        pendingOrders: document.getElementById('pendingOrders'),
-        confirmedOrders: document.getElementById('confirmedOrders'),
-        shippedOrders: document.getElementById('shippedOrders'),
-        totalRevenue: document.getElementById('totalRevenue')
-    };
+    // Force reset first
+    billingInitialized = false;
+    currentOrders = [];
+    currentOrderDetails = null;
     
-    const billingElements = {
-        ordersTableBody: document.getElementById('ordersTableBody'),
-        refreshBtn: document.getElementById('refreshOrdersBtn'),
-        statusFilter: document.getElementById('statusFilter'),
-        paymentFilter: document.getElementById('paymentFilter'),
-        dateFilter: document.getElementById('dateFilter')
-    };
+    // Check if required elements exist
+    const ordersTable = document.getElementById('ordersTableBody');
+    const statsContainer = document.querySelector('.stats-container');
     
-    console.log('🔍 Billing Management elements found:', {
-        stats: Object.keys(statsElements).filter(key => statsElements[key]).length,
-        billingElements: Object.keys(billingElements).filter(key => billingElements[key]).length
-    });
-    
-    if (billingElements.ordersTableBody) {
-        loadOrderStats();
-        loadOrders();
-        setupEventListeners();
-        
-        // Make functions globally available
-        window.loadOrders = loadOrders;
-        window.filterOrders = filterOrders;
-        window.viewOrderDetails = viewOrderDetails;
-        window.updateOrderStatus = updateOrderStatus;
-        window.closeOrderModal = closeOrderModal;
-        window.hideToast = hideToast;
-        
-        console.log('✅ Billing management initialized successfully');
-    } else {
-        console.log('⏳ Retrying initialization...');
-        setTimeout(initializeBillingManagement, 500);
+    if (!ordersTable || !statsContainer) {
+        console.log('❌ Required elements not found, retrying in 500ms...');
+        setTimeout(() => {
+            initializeBillingManagement();
+        }, 500);
+        return;
     }
+    
+    console.log('✅ All required elements found, proceeding with initialization');
+    
+    // Mark as initialized
+    billingInitialized = true;
+    
+    // Load initial data
+    loadOrderStats();
+    loadOrders();
+    setupEventListeners();
+    
+    // Make functions globally available
+    window.loadOrders = loadOrders;
+    window.viewOrderDetails = viewOrderDetails;
+    window.updateOrderStatus = updateOrderStatus;
+    window.closeOrderModal = closeOrderModal;
+    window.hideToast = hideToast;
+    
+    console.log('✅ Billing management initialized successfully');
 }
 
 /**
@@ -152,49 +68,54 @@ function initializeBillingManagement() {
 function setupEventListeners() {
     console.log('🎯 Setting up event listeners...');
     
+    // Refresh button
     const refreshBtn = document.getElementById('refreshOrdersBtn');
-    const statusFilter = document.getElementById('statusFilter');
-    const paymentFilter = document.getElementById('paymentFilter');
-    const dateFilter = document.getElementById('dateFilter');
-    
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => {
+        // Remove any existing listeners
+        refreshBtn.replaceWith(refreshBtn.cloneNode(true));
+        const newRefreshBtn = document.getElementById('refreshOrdersBtn');
+        newRefreshBtn.addEventListener('click', () => {
+            console.log('🔄 Refresh button clicked');
             loadOrderStats();
             loadOrders();
         });
         console.log('✅ Refresh button listener added');
     }
     
+    // Filter dropdowns
+    const statusFilter = document.getElementById('statusFilter');
+    const paymentFilter = document.getElementById('paymentFilter');
+    const dateFilter = document.getElementById('dateFilter');
+    
     if (statusFilter) {
-        statusFilter.addEventListener('change', filterOrders);
+        statusFilter.replaceWith(statusFilter.cloneNode(true));
+        const newStatusFilter = document.getElementById('statusFilter');
+        newStatusFilter.addEventListener('change', () => {
+            console.log('🔍 Status filter changed:', newStatusFilter.value);
+            loadOrders();
+        });
         console.log('✅ Status filter listener added');
     }
     
     if (paymentFilter) {
-        paymentFilter.addEventListener('change', filterOrders);
+        paymentFilter.replaceWith(paymentFilter.cloneNode(true));
+        const newPaymentFilter = document.getElementById('paymentFilter');
+        newPaymentFilter.addEventListener('change', () => {
+            console.log('🔍 Payment filter changed:', newPaymentFilter.value);
+            loadOrders();
+        });
         console.log('✅ Payment filter listener added');
     }
     
     if (dateFilter) {
-        dateFilter.addEventListener('change', filterOrders);
+        dateFilter.replaceWith(dateFilter.cloneNode(true));
+        const newDateFilter = document.getElementById('dateFilter');
+        newDateFilter.addEventListener('change', () => {
+            console.log('🔍 Date filter changed:', newDateFilter.value);
+            loadOrders();
+        });
         console.log('✅ Date filter listener added');
     }
-    
-    // Modal outside click handling
-    window.addEventListener('click', (e) => {
-        const orderModal = document.getElementById('orderDetailsModal');
-        if (e.target === orderModal) {
-            closeOrderModal();
-        }
-    });
-    
-    // Keyboard handling
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeOrderModal();
-            hideToast();
-        }
-    });
     
     console.log('✅ Event listeners setup complete');
 }
@@ -246,6 +167,7 @@ function updateStatsUI(stats) {
         pendingOrders: document.getElementById('pendingOrders'),
         confirmedOrders: document.getElementById('confirmedOrders'),
         shippedOrders: document.getElementById('shippedOrders'),
+        deliveredOrders: document.getElementById('deliveredOrders'),
         totalRevenue: document.getElementById('totalRevenue')
     };
     
@@ -253,6 +175,7 @@ function updateStatsUI(stats) {
     if (elements.pendingOrders) elements.pendingOrders.textContent = stats.pendingOrders || 0;
     if (elements.confirmedOrders) elements.confirmedOrders.textContent = stats.confirmedOrders || 0;
     if (elements.shippedOrders) elements.shippedOrders.textContent = stats.shippedOrders || 0;
+    if (elements.deliveredOrders) elements.deliveredOrders.textContent = stats.deliveredOrders || 0;
     if (elements.totalRevenue) {
         const revenue = stats.totalRevenue || 0;
         elements.totalRevenue.textContent = `Rs. ${parseFloat(revenue).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
@@ -266,12 +189,11 @@ function updateStatsUI(stats) {
  */
 function showStatsError(message) {
     console.error('📊 Stats error:', message);
-    const elements = ['totalOrders', 'pendingOrders', 'confirmedOrders', 'shippedOrders', 'totalRevenue'];
+    const elements = ['totalOrders', 'pendingOrders', 'confirmedOrders', 'shippedOrders', 'deliveredOrders', 'totalRevenue'];
     elements.forEach(id => {
         const element = document.getElementById(id);
         if (element) element.textContent = 'Error';
     });
-    
     showToast('Statistics error: ' + message, 'error');
 }
 
@@ -284,13 +206,20 @@ function loadOrders() {
     
     if (!ordersTableBody) {
         console.error('❌ Orders table body not found');
-        showToast('Orders table not found', 'error');
         return;
     }
     
     // Show loading state
-    ordersTableBody.innerHTML = '<tr><td colspan="9" class="loading">🔄 Loading orders...</td></tr>';
+    ordersTableBody.innerHTML = `
+        <tr>
+            <td colspan="8" class="loading">
+                <div class="loading-spinner"></div>
+                Loading orders...
+            </td>
+        </tr>
+    `;
     
+    // Get filter values (with null checks)
     const statusFilter = document.getElementById('statusFilter');
     const paymentFilter = document.getElementById('paymentFilter');
     const dateFilter = document.getElementById('dateFilter');
@@ -299,7 +228,7 @@ function loadOrders() {
     const paymentValue = paymentFilter ? paymentFilter.value : '';
     const dateValue = dateFilter ? dateFilter.value : '';
     
-    let ordersUrl = `${baseUrl}/admin/orders`;
+    let ordersUrl = `${baseUrl}/admin/orders/`;
     const params = new URLSearchParams();
     if (statusValue) params.append('status', statusValue);
     if (paymentValue) params.append('payment', paymentValue);
@@ -327,7 +256,7 @@ function loadOrders() {
             if (data.success) {
                 currentOrders = data.orders || [];
                 console.log(`📦 Loaded ${currentOrders.length} orders`);
-                displayOrders(currentOrders);
+                displayOrdersInTable(currentOrders);
             } else {
                 console.error('❌ Orders API error:', data.message);
                 showOrdersError('Failed to load orders: ' + data.message);
@@ -342,18 +271,25 @@ function loadOrders() {
 /**
  * Display orders in table
  */
-function displayOrders(orders) {
+function displayOrdersInTable(orders) {
     console.log(`📋 Displaying ${orders.length} orders`);
     const ordersTableBody = document.getElementById('ordersTableBody');
     
     if (!ordersTableBody) {
         console.error('❌ Orders table body not found');
-        showToast('Orders table not found', 'error');
         return;
     }
     
     if (orders.length === 0) {
-        ordersTableBody.innerHTML = '<tr><td colspan="9" class="loading">📭 No orders found</td></tr>';
+        ordersTableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No Orders Found</h3>
+                    <p>No orders match your current filters.</p>
+                </td>
+            </tr>
+        `;
         return;
     }
     
@@ -372,26 +308,47 @@ function displayOrders(orders) {
                 order.orderItems.reduce((sum, item) => sum + item.quantity, 0) : 0;
             
             return `
-                <tr class="fade-in">
-                    <td><strong>#${order.id}</strong></td>
+                <tr>
                     <td>
-                        <div>
-                            <strong>${order.customerName || 'N/A'}</strong><br>
-                            <small>${order.customerEmail || 'N/A'}</small>
+                        <span class="order-id">#${order.id}</span>
+                    </td>
+                    <td>
+                        <div class="customer-info">
+                            <div class="customer-name">${order.customerName || 'N/A'}</div>
+                            <div class="customer-email">${order.customerEmail || 'N/A'}</div>
                         </div>
                     </td>
-                    <td>${order.contactNumber || 'N/A'}</td>
                     <td>
-                        <span class="badge">${itemCount} items (${totalItems} qty)</span>
+                        <div class="items-preview">
+                            ${order.orderItems && order.orderItems.length > 0 ? 
+                                `<img src="${order.orderItems[0].itemImagePath || 'https://via.placeholder.com/30x35'}" 
+                                     alt="Item" class="item-thumb" 
+                                     onerror="this.src='https://via.placeholder.com/30x35'">` : 
+                                '<span style="color: #666;">No image</span>'
+                            }
+                            <span class="items-count">${itemCount} items (${totalItems} qty)</span>
+                        </div>
                     </td>
-                    <td><strong>Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                    <td><span class="badge payment-${(order.paymentMethod || '').toLowerCase()}">${getPaymentMethodDisplay(order.paymentMethod)}</span></td>
-                    <td><span class="badge status-${(order.status || '').toLowerCase()}">${getStatusDisplay(order.status)}</span></td>
+                    <td>
+                        <span class="amount">Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                    </td>
+                    <td>
+                        <span class="payment-method payment-${(order.paymentMethod || '').toLowerCase()}">
+                            ${getPaymentMethodDisplay(order.paymentMethod)}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="status-badge status-${(order.status || '').toLowerCase()}">
+                            ${getStatusDisplay(order.status)}
+                        </span>
+                    </td>
                     <td>${orderDate}</td>
                     <td>
-                        <button class="action-btn view-btn" onclick="viewOrderDetails(${order.id})">
-                            <i class="icon-eye"></i> View
-                        </button>
+                        <div class="action-buttons">
+                            <button class="btn btn-view" onclick="viewOrderDetails(${order.id})">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -409,12 +366,9 @@ function displayOrders(orders) {
  */
 function getPaymentMethodDisplay(paymentMethod) {
     switch (paymentMethod) {
-        case 'cod':
-            return 'Cash on Delivery';
-        case 'online':
-            return 'Online Payment';
-        default:
-            return paymentMethod || 'N/A';
+        case 'cod': return 'COD';
+        case 'online': return 'Online';
+        default: return paymentMethod || 'N/A';
     }
 }
 
@@ -423,18 +377,12 @@ function getPaymentMethodDisplay(paymentMethod) {
  */
 function getStatusDisplay(status) {
     switch (status) {
-        case 'pending':
-            return 'Pending';
-        case 'confirmed':
-            return 'Confirmed';
-        case 'shipped':
-            return 'Shipped';
-        case 'delivered':
-            return 'Delivered';
-        case 'cancelled':
-            return 'Cancelled';
-        default:
-            return status || 'Unknown';
+        case 'pending': return 'Pending';
+        case 'confirmed': return 'Confirmed';
+        case 'shipped': return 'Shipped';
+        case 'delivered': return 'Delivered';
+        case 'cancelled': return 'Cancelled';
+        default: return status || 'Unknown';
     }
 }
 
@@ -445,20 +393,19 @@ function showOrdersError(message) {
     const ordersTableBody = document.getElementById('ordersTableBody');
     if (ordersTableBody) {
         ordersTableBody.innerHTML = `
-            <tr><td colspan="9" class="loading" style="color: #dc3545;">
-                ❌ ${message}
-            </td></tr>
+            <tr>
+                <td colspan="8" class="empty-state" style="color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Error Loading Orders</h3>
+                    <p>${message}</p>
+                    <button class="btn btn-view" onclick="loadOrders()" style="margin-top: 15px;">
+                        <i class="fas fa-retry"></i> Try Again
+                    </button>
+                </td>
+            </tr>
         `;
     }
     showToast(message, 'error');
-}
-
-/**
- * Filter orders
- */
-function filterOrders() {
-    console.log('🔍 Filtering orders...');
-    loadOrders();
 }
 
 /**
@@ -476,14 +423,26 @@ function viewOrderDetails(orderId) {
     currentOrderDetails = order;
     
     // Populate order details modal
-    document.getElementById('orderModalTitle').textContent = `Order #${order.id} Details`;
-    document.getElementById('detailOrderId').textContent = order.id || 'N/A';
-    document.getElementById('detailCustomerName').textContent = order.customerName || 'N/A';
-    document.getElementById('detailCustomerEmail').textContent = order.customerEmail || 'N/A';
-    document.getElementById('detailContactNumber').textContent = order.contactNumber || 'N/A';
-    document.getElementById('detailPaymentMethod').textContent = getPaymentMethodDisplay(order.paymentMethod);
-    document.getElementById('detailShippingAddress').textContent = order.shippingAddress || 'N/A';
-    document.getElementById('detailTotalAmount').textContent = `Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+    const modalTitle = document.getElementById('modalTitle');
+    if (modalTitle) modalTitle.textContent = `Order #${order.id} Details`;
+    
+    const detailElements = {
+        detailOrderId: order.id || 'N/A',
+        detailCustomerName: order.customerName || 'N/A',
+        detailCustomerEmail: order.customerEmail || 'N/A',
+        detailContactNumber: order.contactNumber || 'N/A',
+        detailPaymentMethod: getPaymentMethodDisplay(order.paymentMethod),
+        detailShippingAddress: order.shippingAddress || 'N/A',
+        detailTotalAmount: `Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`
+    };
+    
+    // Update detail elements
+    Object.keys(detailElements).forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = detailElements[id];
+        }
+    });
     
     const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -492,7 +451,9 @@ function viewOrderDetails(orderId) {
         hour: '2-digit',
         minute: '2-digit'
     });
-    document.getElementById('detailOrderDate').textContent = orderDate;
+    
+    const detailOrderDate = document.getElementById('detailOrderDate');
+    if (detailOrderDate) detailOrderDate.textContent = orderDate;
     
     // Set current status in dropdown
     const statusSelect = document.getElementById('newOrderStatus');
@@ -501,54 +462,53 @@ function viewOrderDetails(orderId) {
     }
     
     // Display order items
-    displayOrderItems(order.orderItems || []);
+    displayOrderItemsInModal(order.orderItems || []);
     
     // Show modal
     const modal = document.getElementById('orderDetailsModal');
     if (modal) {
         modal.style.display = 'block';
-        statusSelect?.focus();
+        document.body.style.overflow = 'hidden';
     }
 }
 
 /**
  * Display order items in modal
  */
-function displayOrderItems(orderItems) {
+function displayOrderItemsInModal(orderItems) {
     const orderItemsTableBody = document.getElementById('orderItemsTableBody');
     
     if (!orderItemsTableBody) {
         console.error('❌ Order items table body not found');
-        showToast('Order items table not found', 'error');
         return;
     }
     
     if (orderItems.length === 0) {
-        orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading">📭 No items found</td></tr>';
+        orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading">No items found</td></tr>';
         return;
     }
     
     try {
-        const defaultImage = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTIT0JYsgYabTZ5gykfiSeOUxN6NDDXuuHVuA&s';
+        const defaultImage = 'https://via.placeholder.com/40x50';
         orderItemsTableBody.innerHTML = orderItems.map(item => {
             const itemTotal = parseFloat(item.price || 0) * parseInt(item.quantity || 0);
             
             return `
                 <tr>
                     <td>
-                        <div class="item-info">
-                            ${item.itemImagePath ? 
-                                `<img src="${item.itemImagePath}" alt="${item.itemTitle}" class="item-image" onerror="this.src='${defaultImage}'">` : 
-                                '<div class="item-image" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6c757d;">No Image</div>'
-                            }
-                            <div class="item-details">
-                                <h5>${item.itemTitle || 'N/A'}</h5>
-                                <p>by ${item.itemAuthor || 'Unknown'}</p>
+                        <div class="item-details">
+                            <img src="${item.itemImagePath || defaultImage}" 
+                                 alt="${item.itemTitle}" 
+                                 class="item-image" 
+                                 onerror="this.src='${defaultImage}'">
+                            <div class="item-info">
+                                <h6>${item.itemTitle || 'N/A'}</h6>
+                                <small>by ${item.itemAuthor || 'Unknown'}</small>
                             </div>
                         </div>
                     </td>
                     <td><strong>Rs. ${parseFloat(item.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                    <td><span class="badge">${item.quantity || 0}</span></td>
+                    <td><span class="items-count">${item.quantity || 0}</span></td>
                     <td><strong>Rs. ${itemTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
                 </tr>
             `;
@@ -557,8 +517,7 @@ function displayOrderItems(orderItems) {
         console.log('✅ Order items displayed successfully');
     } catch (error) {
         console.error('❌ Error displaying order items:', error);
-        orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading" style="color: #dc3545;">❌ Error loading items</td></tr>';
-        showToast('Error displaying order items', 'error');
+        orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading" style="color: #dc3545;">Error loading items</td></tr>';
     }
 }
 
@@ -590,7 +549,7 @@ function updateOrderStatus() {
         return;
     }
     
-    const url = `${baseUrl}/admin/update-order-status`;
+    const url = `${baseUrl}/admin/orders/update-status`;
     
     fetch(url, {
         method: 'POST',
@@ -617,7 +576,7 @@ function updateOrderStatus() {
                 }
                 
                 // Refresh displays
-                displayOrders(currentOrders);
+                displayOrdersInTable(currentOrders);
                 loadOrderStats();
                 
                 // Close modal after successful update
@@ -642,6 +601,7 @@ function closeOrderModal() {
     const modal = document.getElementById('orderDetailsModal');
     if (modal) {
         modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
         currentOrderDetails = null;
     }
 }
@@ -652,16 +612,18 @@ function closeOrderModal() {
 function showToast(message, type = 'info') {
     console.log(`📢 ${type.toUpperCase()}: ${message}`);
     
-    const toast = document.getElementById('messageToast');
+    const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toastMessage');
     
     if (toast && toastMessage) {
         toastMessage.textContent = message;
         toast.className = `toast ${type}`;
         toast.classList.add('show');
+        
+        // Auto hide after 4 seconds
         setTimeout(() => {
             hideToast();
-        }, 5000);
+        }, 4000);
     }
 }
 
@@ -669,75 +631,23 @@ function showToast(message, type = 'info') {
  * Hide toast
  */
 function hideToast() {
-    const toast = document.getElementById('messageToast');
+    const toast = document.getElementById('toast');
     if (toast) {
         toast.classList.remove('show');
     }
 }
 
-// Add CSS
-const style = document.createElement('style');
-style.textContent = `
-    .loading-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 50px;
-        text-align: center;
-    }
-    .loading-spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #007bff;
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    .error-container {
-        padding: 20px;
-        text-align: center;
-        color: #dc3545;
-    }
-    .item-image {
-        width: 50px;
-        height: 50px;
-        object-fit: cover;
-        margin-right: 10px;
-    }
-    .item-info {
-        display: flex;
-        align-items: center;
-    }
-    .item-details {
-        flex: 1;
-    }
-    .badge {
-        padding: 5px 10px;
-        border-radius: 12px;
-        font-size: 12px;
-    }
-    .action-btn {
-        padding: 5px 10px;
-        margin: 0 2px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-    .view-btn {
-        background-color: #007bff;
-        color: white;
-    }
-    .fade-in {
-        animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-`;
-document.head.appendChild(style);
+// Export functions for global access
+window.billingManager = {
+    initializeBillingManagement,
+    resetBillingInitialization,
+    loadOrders,
+    viewOrderDetails,
+    updateOrderStatus,
+    closeOrderModal,
+    hideToast
+};
+
+// Also make direct functions available
+window.initializeBillingManagement = initializeBillingManagement;
+window.resetBillingInitialization = resetBillingInitialization;
