@@ -37,13 +37,12 @@ request.setAttribute("categories", categories);
             <div class="nav-logo">
                 <h2>📚 Pahana Edu</h2>
             </div>
-            
             <div class="nav-menu">
-                <a href="customer-dashboard.jsp">Home</a>
-                <a href="products.jsp" class="active">Products</a>
-                <a href="about.jsp">About</a>
-                <a href="contact.jsp">Contact</a>
-            </div>
+			    <a href="customer-dashboard.jsp">Home</a>
+			    <a href="products.jsp" class="active">Products</a>
+			    <a href="customer-dashboard.jsp#about">About</a>
+			    <a href="customer-dashboard.jsp#contact">Contact</a>
+			</div>
             
             <div class="nav-actions">
                 <div class="search-box">

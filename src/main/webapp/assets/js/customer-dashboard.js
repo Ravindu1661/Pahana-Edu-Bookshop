@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load user information
     function loadUserInfo() {
-        // User info comes from JSP session
         console.log('👤 User loaded from session');
     }
     
@@ -52,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('❌ Categories fetch error:', error);
-            loadSampleCategories(); // Fallback to sample data
+            loadSampleCategories();
         });
     }
     
@@ -98,7 +97,6 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('❌ Recent products fetch error:', error);
-            loadSampleProducts('recent');
         });
     }
     
@@ -119,49 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('❌ Featured products fetch error:', error);
-            loadSampleProducts('featured');
         });
-    }
-    
-    // Load sample products (fallback)
-    function loadSampleProducts(type) {
-        const sampleProducts = [
-            {
-                id: 1,
-                title: "The Great Gatsby",
-                author: "F. Scott Fitzgerald",
-                price: 1500,
-                offerPrice: 1200,
-                imagePath: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                stock: 10
-            },
-            {
-                id: 2,
-                title: "To Kill a Mockingbird",
-                author: "Harper Lee",
-                price: 1800,
-                offerPrice: null,
-                imagePath: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                stock: 5
-            },
-            {
-                id: 3,
-                title: "1984",
-                author: "George Orwell",
-                price: 1400,
-                offerPrice: 1100,
-                imagePath: "https://images.unsplash.com/photo-1512820790803-83ca734da794?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                stock: 8
-            }
-        ];
-        
-        if (type === 'recent') {
-            recentProducts = sampleProducts;
-            displayRecentProducts();
-        } else {
-            featuredProducts = sampleProducts.slice(0, 2);
-            displayFeaturedProducts();
-        }
     }
     
     // Display recent products
@@ -180,19 +136,27 @@ document.addEventListener('DOMContentLoaded', () => {
         grid.innerHTML = featuredProducts.map(product => createProductCard(product)).join('');
     }
     
-    // Create product card HTML
+    // Create product card HTML with complete product information
     function createProductCard(product) {
         const imageUrl = getProductImage(product.imagePath);
         const currentPrice = product.offerPrice || product.price;
         const originalPrice = product.offerPrice ? product.price : null;
+        const stockStatus = product.stock > 0 ? 'In Stock' : 'Out of Stock';
+        const stockClass = product.stock > 0 ? 'in-stock' : 'out-of-stock';
         
         return `
             <div class="product-card">
                 <img src="${imageUrl}" alt="${product.title}" class="product-image" 
                      onerror="this.src='${defaultImage}'">
                 <div class="product-info">
+                    <div class="product-category">${product.categoryName || 'General'}</div>
                     <h3 class="product-title">${product.title}</h3>
                     <p class="product-author">by ${product.author}</p>
+                    <p class="product-description">${truncateText(product.description || 'No description available', 80)}</p>
+                    <div class="product-stock ${stockClass}">
+                        <i class="fas fa-box"></i>
+                        <span>${stockStatus} (${product.stock} available)</span>
+                    </div>
                     <div class="product-price">
                         <span class="current-price">Rs. ${currentPrice}</span>
                         ${originalPrice ? `<span class="original-price">Rs. ${originalPrice}</span>` : ''}
@@ -208,29 +172,86 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
     
+    // Enhanced out-of-stock display method
+    function updateOutOfStockDisplay(productElement, isOutOfStock) {
+        const stockDiv = productElement.querySelector('.product-stock');
+        const addToCartBtn = productElement.querySelector('.add-to-cart');
+        
+        if (isOutOfStock) {
+            // Update stock display
+            if (stockDiv) {
+                stockDiv.className = 'product-stock out-of-stock';
+                stockDiv.innerHTML = '<i class="fas fa-box"></i><span>Out of Stock (0 available)</span>';
+            }
+            
+            // Update button
+            if (addToCartBtn) {
+                addToCartBtn.disabled = true;
+                addToCartBtn.textContent = 'Out of Stock';
+                addToCartBtn.style.backgroundColor = '#ccc';
+                addToCartBtn.style.cursor = 'not-allowed';
+                addToCartBtn.style.opacity = '0.6';
+            }
+            
+            // Add visual indicator to product card
+            productElement.classList.add('out-of-stock-product');
+            productElement.style.opacity = '0.8';
+            
+        } else {
+            // Update stock display
+            if (stockDiv) {
+                stockDiv.className = 'product-stock in-stock';
+                stockDiv.innerHTML = '<i class="fas fa-box"></i><span>In Stock (Available)</span>';
+            }
+            
+            // Update button
+            if (addToCartBtn) {
+                addToCartBtn.disabled = false;
+                addToCartBtn.textContent = 'Add to Cart';
+                addToCartBtn.style.backgroundColor = '';
+                addToCartBtn.style.cursor = 'pointer';
+                addToCartBtn.style.opacity = '1';
+            }
+            
+            // Remove visual indicator
+            productElement.classList.remove('out-of-stock-product');
+            productElement.style.opacity = '1';
+        }
+    }
+    
+    // Truncate text helper function
+    function truncateText(text, maxLength) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+    
     // Get product image URL
     function getProductImage(imagePath) {
         if (!imagePath || imagePath.trim() === '') {
             return defaultImage;
         }
         
-        // Check if it's base64 data
         if (imagePath.startsWith('data:image/')) {
             return imagePath;
         }
         
-        // Check if it's a full URL
         if (imagePath.startsWith('http')) {
             return imagePath;
         }
         
-        // Relative path
         return baseUrl + '/' + imagePath;
     }
     
     // Add to cart function
     function addToCart(productId) {
         console.log('🛒 Adding product to cart:', productId);
+        
+        // Check if product is in stock before adding
+        const productElement = document.querySelector(`[onclick="addToCart(${productId})"]`).closest('.product-card');
+        if (productElement && productElement.classList.contains('out-of-stock-product')) {
+            showToast('❌ Product is out of stock', 'error');
+            return;
+        }
         
         showLoading();
         
@@ -331,17 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('❌ Cart items fetch error:', error);
-            // Show sample cart for demo
-            cartItems = [
-                {
-                    id: 1,
-                    productId: 1,
-                    title: "Sample Book",
-                    price: 1500,
-                    quantity: 1,
-                    imagePath: defaultImage
-                }
-            ];
+            cartItems = [];
             displayCartItems();
             updateCartTotal();
         });
@@ -476,7 +487,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Setup event listeners
     function setupEventListeners() {
-        // Search functionality
         const searchBtn = document.getElementById('searchBtn');
         const searchInput = document.getElementById('searchInput');
         
@@ -492,12 +502,76 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Close cart on escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeCart();
             }
         });
+        
+        // Setup navigation
+        setupNavigation();
+        
+        // Setup contact form
+        setupContactForm();
+    }
+    
+    // Setup navigation between sections
+    function setupNavigation() {
+        const navLinks = document.querySelectorAll('.nav-link[data-section]');
+        const footerLinks = document.querySelectorAll('a[data-section]');
+        
+        // Add click handlers for navigation links
+        [...navLinks, ...footerLinks].forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const sectionId = link.getAttribute('data-section');
+                showSection(sectionId);
+                
+                // Update active nav link
+                navLinks.forEach(navLink => navLink.classList.remove('active'));
+                document.querySelector(`[data-section="${sectionId}"]`).classList.add('active');
+            });
+        });
+    }
+    
+    // Show specific section
+    function showSection(sectionId) {
+        // Hide all sections
+        document.querySelectorAll('.section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        // Show target section
+        const targetSection = document.getElementById(sectionId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+        }
+    }
+    
+    // Setup contact form
+    function setupContactForm() {
+        const contactForm = document.getElementById('contactForm');
+        if (contactForm) {
+            contactForm.addEventListener('submit', handleContactForm);
+        }
+    }
+    
+    // Handle contact form submission
+    function handleContactForm(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData);
+        
+        // Show loading
+        showLoading();
+        
+        // Simulate form submission (replace with actual API call)
+        setTimeout(() => {
+            hideLoading();
+            showToast('✅ Message sent successfully! We\'ll get back to you soon.', 'success');
+            e.target.reset();
+        }, 2000);
     }
     
     // Utility functions
@@ -541,6 +615,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.goToCheckout = goToCheckout;
     window.viewCategoryProducts = viewCategoryProducts;
     window.hideToast = hideToast;
+    window.updateOutOfStockDisplay = updateOutOfStockDisplay;
     
-    console.log('✅ Customer Dashboard initialized successfully');
 });

@@ -115,32 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.deleteCategory = null;
         window.currentImageData = null;
         
-        // Reset initialization flags
-        if (typeof billingInitialized !== 'undefined') {
-            billingInitialized = false;
-        }
-        if (typeof itemManagementInitialized !== 'undefined') {
-            itemManagementInitialized = false;
-        }
-        
-        // Call reset functions if available
-        try {
-            if (typeof resetBillingInitialization === 'function') {
-                resetBillingInitialization();
-            }
-            if (window.billingManager && typeof window.billingManager.resetBillingInitialization === 'function') {
-                window.billingManager.resetBillingInitialization();
-            }
-            if (typeof resetItemManagementInitialization === 'function') {
-                resetItemManagementInitialization();
-            }
-            if (window.itemManager && typeof window.itemManager.resetItemManagementInitialization === 'function') {
-                window.itemManager.resetItemManagementInitialization();
-            }
-        } catch (error) {
-            console.warn('⚠️ Cleanup error (non-critical):', error);
-        }
-        
         console.log('✅ Force cleanup completed');
     }
     
@@ -149,14 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function initializePage(page) {
         console.log('🔧 Initializing page:', page);
-        console.log('🔍 Available managers:');
-        console.log('  - billingManager:', typeof window.billingManager);
-        console.log('  - itemManager:', typeof window.itemManager);
-        
-        // Direct function checks
-        console.log('🔍 Available functions:');
-        console.log('  - initializeBillingManagement:', typeof window.initializeBillingManagement);
-        console.log('  - initializeItemManagement:', typeof window.initializeItemManagement);
         
         if (page.includes('admin-Manage-Users.jsp')) {
             console.log('👥 Initializing User Management...');
@@ -197,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * Initialize Item Management
+     * Initialize Item Management - FIXED VERSION
      */
     function initializeItems() {
         // Check required elements first
@@ -212,42 +178,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        console.log('✅ Item elements found, loading data...');
+        console.log('✅ Item elements found, initializing...');
         
-        // Try external manager first
-        if (typeof window.itemManager !== 'undefined') {
-            console.log('🔧 Using external item manager...');
-            try {
-                window.itemManager.resetItemManagementInitialization();
-                window.itemManager.initializeItemManagement();
-                return;
-            } catch (error) {
-                console.error('❌ External item manager error:', error);
-            }
-        }
-        
-        // Try direct function
-        if (typeof window.initializeItemManagement === 'function') {
-            console.log('🔧 Using direct item function...');
-            try {
-                window.initializeItemManagement();
-                return;
-            } catch (error) {
-                console.error('❌ Direct item function error:', error);
-            }
-        }
-        
-        // Fallback to built-in functions
-        console.log('🔧 Using built-in item functions...');
+        // Initialize directly with built-in functions
         loadItemStats();
         loadItems();
         loadCategories();
         setupItemEvents();
+        setupItemFormHandlers(); // NEW: Setup form handlers
         makeItemFunctionsGlobal();
     }
     
     /**
-     * Initialize Billing Management
+     * Initialize Billing Management - FIXED VERSION
      */
     function initializeBilling() {
         // Check required elements first
@@ -262,35 +205,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        console.log('✅ Billing elements found');
+        console.log('✅ Billing elements found, initializing...');
         
-        // Try external manager first
-        if (typeof window.billingManager !== 'undefined') {
-            console.log('🔧 Using billing manager...');
-            try {
-                window.billingManager.resetBillingInitialization();
-                window.billingManager.initializeBillingManagement();
-                return;
-            } catch (error) {
-                console.error('❌ Billing manager error:', error);
-            }
-        }
-        
-        // Try direct function
-        if (typeof window.initializeBillingManagement === 'function') {
-            console.log('🔧 Using direct billing function...');
-            try {
-                window.initializeBillingManagement();
-                return;
-            } catch (error) {
-                console.error('❌ Direct billing function error:', error);
-            }
-        }
-        
-        console.warn('⚠️ Billing initialization failed, retrying...');
-        setTimeout(() => {
-            initializeBilling();
-        }, 1000);
+        // Initialize directly with built-in functions
+        loadOrderStats();
+        loadOrders();
+        setupBillingEvents();
+        makeBillingFunctionsGlobal();
     }
     
     /**
@@ -300,12 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('⚙️ Settings initialized');
     }
     
-    // Billing Management Core Functions (inline for reliability)
-    let currentOrders = [];
-    let currentOrderDetails = null;
-    let billingInitialized = false;
-    
-    // Item Management Core Functions (inline for reliability)
+    // Item Management Variables
     let currentItems = [];
     let currentCategories = [];
     let editItem = null;
@@ -313,12 +229,517 @@ document.addEventListener('DOMContentLoaded', () => {
     let editCategory = null;
     let deleteCategory = null;
     let currentImageData = null;
-    let itemManagementInitialized = false;
     
-    // User Management Core Functions (inline for reliability)
-    let currentUsers = [];
-    let currentEditUser = null;
-    let currentDeleteUser = null;
+    // Billing Management Variables
+    let currentOrders = [];
+    let currentOrderDetails = null;
+    
+    // BILLING MANAGEMENT FUNCTIONS - ADDED
+    
+    function loadOrderStats() {
+        console.log('📊 Loading order statistics...');
+        const statsUrl = `${baseUrl}/admin/order-stats`;
+        
+        fetch(statsUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => {
+                console.log('📡 Stats response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Stats data received:', data);
+                if (data.success) {
+                    updateStatsUI(data.stats);
+                } else {
+                    console.error('❌ Stats API error:', data.message);
+                    showStatsError(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Stats fetch error:', error);
+                showStatsError(error.message);
+            });
+    }
+    
+    function updateStatsUI(stats) {
+        console.log('📊 Updating stats UI:', stats);
+        
+        const elements = {
+            totalOrders: document.getElementById('totalOrders'),
+            pendingOrders: document.getElementById('pendingOrders'),
+            confirmedOrders: document.getElementById('confirmedOrders'),
+            shippedOrders: document.getElementById('shippedOrders'),
+            deliveredOrders: document.getElementById('deliveredOrders'),
+            totalRevenue: document.getElementById('totalRevenue')
+        };
+        
+        if (elements.totalOrders) elements.totalOrders.textContent = stats.totalOrders || 0;
+        if (elements.pendingOrders) elements.pendingOrders.textContent = stats.pendingOrders || 0;
+        if (elements.confirmedOrders) elements.confirmedOrders.textContent = stats.confirmedOrders || 0;
+        if (elements.shippedOrders) elements.shippedOrders.textContent = stats.shippedOrders || 0;
+        if (elements.deliveredOrders) elements.deliveredOrders.textContent = stats.deliveredOrders || 0;
+        if (elements.totalRevenue) {
+            const revenue = stats.totalRevenue || 0;
+            elements.totalRevenue.textContent = `Rs. ${parseFloat(revenue).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+        }
+        
+        console.log('✅ Stats UI updated successfully');
+    }
+    
+    function showStatsError(message) {
+        console.error('📊 Stats error:', message);
+        const elements = ['totalOrders', 'pendingOrders', 'confirmedOrders', 'shippedOrders', 'deliveredOrders', 'totalRevenue'];
+        elements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = 'Error';
+        });
+        showToast('Statistics error: ' + message, 'error');
+    }
+    
+    function loadOrders() {
+        console.log('📦 Loading orders...');
+        const ordersTableBody = document.getElementById('ordersTableBody');
+        
+        if (!ordersTableBody) {
+            console.error('❌ Orders table body not found');
+            return;
+        }
+        
+        // Show loading state
+        ordersTableBody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 20px;">
+                    🔄 Loading orders...
+                </td>
+            </tr>
+        `;
+        
+        // Get filter values (with null checks)
+        const statusFilter = document.getElementById('statusFilter');
+        const paymentFilter = document.getElementById('paymentFilter');
+        const dateFilter = document.getElementById('dateFilter');
+        
+        const statusValue = statusFilter ? statusFilter.value : '';
+        const paymentValue = paymentFilter ? paymentFilter.value : '';
+        const dateValue = dateFilter ? dateFilter.value : '';
+        
+        let ordersUrl = `${baseUrl}/admin/orders`;
+        const params = new URLSearchParams();
+        if (statusValue) params.append('status', statusValue);
+        if (paymentValue) params.append('payment', paymentValue);
+        if (dateValue) params.append('date', dateValue);
+        if (params.toString()) ordersUrl += '?' + params.toString();
+        
+        console.log('📡 Orders URL:', ordersUrl);
+        
+        fetch(ordersUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => {
+                console.log('📡 Orders response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Orders data received:', data);
+                if (data.success) {
+                    currentOrders = data.orders || [];
+                    console.log(`📦 Loaded ${currentOrders.length} orders`);
+                    displayOrdersInTable(currentOrders);
+                } else {
+                    console.error('❌ Orders API error:', data.message);
+                    showOrdersError('Failed to load orders: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Orders fetch error:', error);
+                showOrdersError('Error loading orders: ' + error.message);
+            });
+    }
+    
+    function displayOrdersInTable(orders) {
+        console.log(`📋 Displaying ${orders.length} orders`);
+        const ordersTableBody = document.getElementById('ordersTableBody');
+        
+        if (!ordersTableBody) {
+            console.error('❌ Orders table body not found');
+            return;
+        }
+        
+        if (orders.length === 0) {
+            ordersTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 20px;">
+                        📭 No orders found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        try {
+            ordersTableBody.innerHTML = orders.map(order => {
+                const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                const itemCount = order.orderItems ? order.orderItems.length : 0;
+                const totalItems = order.orderItems ? 
+                    order.orderItems.reduce((sum, item) => sum + item.quantity, 0) : 0;
+                
+                return `
+                    <tr>
+                        <td>
+                            <span class="order-id">#${order.id}</span>
+                        </td>
+                        <td>
+                            <div class="customer-info">
+                                <div class="customer-name">${order.customerName || 'N/A'}</div>
+                                <div class="customer-email">${order.customerEmail || 'N/A'}</div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="items-preview">
+                                ${order.orderItems && order.orderItems.length > 0 ? 
+                                    `<img src="${order.orderItems[0].itemImagePath || 'https://via.placeholder.com/30x35'}" 
+                                         alt="Item" class="item-thumb" 
+                                         style="width: 30px; height: 35px; object-fit: cover; margin-right: 5px;"
+                                         onerror="this.src='https://via.placeholder.com/30x35'">` : 
+                                    '<span style="color: #666;">No image</span>'
+                                }
+                                <span class="items-count">${itemCount} items (${totalItems} qty)</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="amount">Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+                        </td>
+                        <td>
+                            <span class="payment-method payment-${(order.paymentMethod || '').toLowerCase()}">
+                                ${getPaymentMethodDisplay(order.paymentMethod)}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-badge status-${(order.status || '').toLowerCase()}">
+                                ${getStatusDisplay(order.status)}
+                            </span>
+                        </td>
+                        <td>${orderDate}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-view" onclick="viewOrderDetails(${order.id})">
+                                    👁️ View
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            console.log('✅ Orders table updated successfully');
+        } catch (error) {
+            console.error('❌ Error displaying orders:', error);
+            showOrdersError('Error displaying orders: ' + error.message);
+        }
+    }
+    
+    function getPaymentMethodDisplay(paymentMethod) {
+        switch (paymentMethod) {
+            case 'cod': return 'COD';
+            case 'online': return 'Online';
+            default: return paymentMethod || 'N/A';
+        }
+    }
+    
+    function getStatusDisplay(status) {
+        switch (status) {
+            case 'pending': return 'Pending';
+            case 'confirmed': return 'Confirmed';
+            case 'shipped': return 'Shipped';
+            case 'delivered': return 'Delivered';
+            case 'cancelled': return 'Cancelled';
+            default: return status || 'Unknown';
+        }
+    }
+    
+    function showOrdersError(message) {
+        const ordersTableBody = document.getElementById('ordersTableBody');
+        if (ordersTableBody) {
+            ordersTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 20px; color: #dc3545;">
+                        ❌ ${message}
+                        <br><br>
+                        <button class="btn btn-view" onclick="loadOrders()" style="margin-top: 15px;">
+                            🔄 Try Again
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+        showToast(message, 'error');
+    }
+    
+    function viewOrderDetails(orderId) {
+        console.log('👁️ Viewing order details:', orderId);
+        
+        const order = currentOrders.find(o => o.id === orderId);
+        if (!order) {
+            showToast('Order not found', 'error');
+            return;
+        }
+        
+        currentOrderDetails = order;
+        
+        // Populate order details modal
+        const modalTitle = document.getElementById('modalTitle');
+        if (modalTitle) modalTitle.textContent = `Order #${order.id} Details`;
+        
+        const detailElements = {
+            detailOrderId: order.id || 'N/A',
+            detailCustomerName: order.customerName || 'N/A',
+            detailCustomerEmail: order.customerEmail || 'N/A',
+            detailContactNumber: order.contactNumber || 'N/A',
+            detailPaymentMethod: getPaymentMethodDisplay(order.paymentMethod),
+            detailShippingAddress: order.shippingAddress || 'N/A',
+            detailTotalAmount: `Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`
+        };
+        
+        // Update detail elements
+        Object.keys(detailElements).forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = detailElements[id];
+            }
+        });
+        
+        const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const detailOrderDate = document.getElementById('detailOrderDate');
+        if (detailOrderDate) detailOrderDate.textContent = orderDate;
+        
+        // Set current status in dropdown
+        const statusSelect = document.getElementById('newOrderStatus');
+        if (statusSelect) {
+            statusSelect.value = order.status || 'pending';
+        }
+        
+        // Display order items
+        displayOrderItemsInModal(order.orderItems || []);
+        
+        // Show modal
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    function displayOrderItemsInModal(orderItems) {
+        const orderItemsTableBody = document.getElementById('orderItemsTableBody');
+        
+        if (!orderItemsTableBody) {
+            console.error('❌ Order items table body not found');
+            return;
+        }
+        
+        if (orderItems.length === 0) {
+            orderItemsTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No items found</td></tr>';
+            return;
+        }
+        
+        try {
+            const defaultImage = 'https://via.placeholder.com/40x50';
+            orderItemsTableBody.innerHTML = orderItems.map(item => {
+                const itemTotal = parseFloat(item.price || 0) * parseInt(item.quantity || 0);
+                
+                return `
+                    <tr>
+                        <td>
+                            <div class="item-details" style="display: flex; align-items: center;">
+                                <img src="${item.itemImagePath || defaultImage}" 
+                                     alt="${item.itemTitle}" 
+                                     class="item-image" 
+                                     style="width: 40px; height: 50px; object-fit: cover; margin-right: 10px;"
+                                     onerror="this.src='${defaultImage}'">
+                                <div class="item-info">
+                                    <h6 style="margin: 0; font-size: 14px;">${item.itemTitle || 'N/A'}</h6>
+                                    <small style="color: #666;">by ${item.itemAuthor || 'Unknown'}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td><strong>Rs. ${parseFloat(item.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+                        <td><span class="items-count">${item.quantity || 0}</span></td>
+                        <td><strong>Rs. ${itemTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+                    </tr>
+                `;
+            }).join('');
+            
+            console.log('✅ Order items displayed successfully');
+        } catch (error) {
+            console.error('❌ Error displaying order items:', error);
+            orderItemsTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">Error loading items</td></tr>';
+        }
+    }
+    
+    function updateOrderStatus() {
+        console.log('📝 Updating order status...');
+        
+        if (!currentOrderDetails) {
+            showToast('No order selected', 'error');
+            return;
+        }
+        
+        const statusSelect = document.getElementById('newOrderStatus');
+        if (!statusSelect) {
+            showToast('Status selector not found', 'error');
+            return;
+        }
+        
+        const newStatus = statusSelect.value;
+        if (!newStatus) {
+            showToast('Please select a status', 'error');
+            return;
+        }
+        
+        if (newStatus === currentOrderDetails.status) {
+            showToast('Status is already set to ' + getStatusDisplay(newStatus), 'info');
+            return;
+        }
+        
+        const url = `${baseUrl}/admin/orders/update-status`;
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                orderId: currentOrderDetails.id,
+                status: newStatus
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Order status updated successfully', 'success');
+                    
+                    // Update current order details
+                    currentOrderDetails.status = newStatus;
+                    
+                    // Update the order in current orders array
+                    const orderIndex = currentOrders.findIndex(o => o.id === currentOrderDetails.id);
+                    if (orderIndex !== -1) {
+                        currentOrders[orderIndex].status = newStatus;
+                    }
+                    
+                    // Refresh displays
+                    displayOrdersInTable(currentOrders);
+                    loadOrderStats();
+                    
+                    // Close modal after successful update
+                    setTimeout(() => {
+                        closeOrderModal();
+                    }, 1500);
+                } else {
+                    showToast(data.message || 'Failed to update order status', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Status update error:', error);
+                showToast('Error updating order status: ' + error.message, 'error');
+            });
+    }
+    
+    function closeOrderModal() {
+        console.log('❌ Closing order details modal');
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            currentOrderDetails = null;
+        }
+    }
+    
+    function setupBillingEvents() {
+        console.log('🎯 Setting up billing events...');
+        
+        // Refresh button
+        const refreshBtn = document.getElementById('refreshOrdersBtn');
+        if (refreshBtn) {
+            refreshBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log('🔄 Refresh button clicked');
+                loadOrderStats();
+                loadOrders();
+            };
+            console.log('✅ Refresh button listener added');
+        }
+        
+        // Filter dropdowns
+        const statusFilter = document.getElementById('statusFilter');
+        const paymentFilter = document.getElementById('paymentFilter');
+        const dateFilter = document.getElementById('dateFilter');
+        
+        if (statusFilter) {
+            statusFilter.onchange = function() {
+                console.log('🔍 Status filter changed:', this.value);
+                loadOrders();
+            };
+            console.log('✅ Status filter listener added');
+        }
+        
+        if (paymentFilter) {
+            paymentFilter.onchange = function() {
+                console.log('🔍 Payment filter changed:', this.value);
+                loadOrders();
+            };
+            console.log('✅ Payment filter listener added');
+        }
+        
+        if (dateFilter) {
+            dateFilter.onchange = function() {
+                console.log('🔍 Date filter changed:', this.value);
+                loadOrders();
+            };
+            console.log('✅ Date filter listener added');
+        }
+        
+        console.log('✅ Billing events setup complete');
+    }
+    
+    function makeBillingFunctionsGlobal() {
+        window.loadOrders = loadOrders;
+        window.viewOrderDetails = viewOrderDetails;
+        window.updateOrderStatus = updateOrderStatus;
+        window.closeOrderModal = closeOrderModal;
+        window.loadOrderStats = loadOrderStats;
+        
+        console.log('✅ Billing functions made global');
+    }
     
     function loadUserStats() {
         console.log('📊 Loading user stats...');
@@ -428,7 +849,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function setupUserEvents() {
-        // Setup user management events (simplified)
         console.log('🎯 Setting up user events...');
     }
     
@@ -438,7 +858,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.loadUsers = loadUsers;
     }
     
-    // Item Management Core Functions (inline for reliability)
+    // ITEM MANAGEMENT FUNCTIONS - SIMPLIFIED AND FIXED
+    
     function loadItemStats() {
         console.log('📊 Loading item statistics...');
         fetch(`${baseUrl}/admin/items/stats`)
@@ -644,43 +1065,790 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusFilter = document.getElementById('statusFilter');
         
         if (addItemBtn) {
-            addItemBtn.replaceWith(addItemBtn.cloneNode(true));
-            document.getElementById('addItemBtn').addEventListener('click', () => {
-                console.log('Add item clicked');
-            });
+            addItemBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log('Add item clicked - opening modal');
+                openAddItemModal();
+            };
+            console.log('✅ Add item button listener added');
         }
         
         if (manageCategoriesBtn) {
-            manageCategoriesBtn.replaceWith(manageCategoriesBtn.cloneNode(true));
-            document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
-                console.log('Manage categories clicked');
-            });
+            manageCategoriesBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log('Manage categories clicked - opening modal');
+                openCategoriesListModal();
+            };
+            console.log('✅ Manage categories button listener added');
         }
         
         if (categoryFilter) {
-            categoryFilter.replaceWith(categoryFilter.cloneNode(true));
-            document.getElementById('categoryFilter').addEventListener('change', loadItems);
+            categoryFilter.onchange = loadItems;
         }
         
         if (statusFilter) {
-            statusFilter.replaceWith(statusFilter.cloneNode(true));
-            document.getElementById('statusFilter').addEventListener('change', loadItems);
+            statusFilter.onchange = loadItems;
         }
         
         console.log('✅ Item events setup complete');
     }
     
+    // NEW: Setup form handlers specifically
+    function setupItemFormHandlers() {
+        console.log('📝 Setting up form handlers...');
+        
+        // Wait a bit for modal to be in DOM
+        setTimeout(() => {
+            const itemForm = document.getElementById('itemForm');
+            const categoryForm = document.getElementById('categoryForm');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+            
+            if (itemForm) {
+                itemForm.onsubmit = handleItemFormSubmit;
+                console.log('✅ Item form handler set');
+            }
+            
+            if (categoryForm) {
+                categoryForm.onsubmit = handleCategoryFormSubmit;
+                console.log('✅ Category form handler set');
+            }
+            
+            if (confirmDeleteBtn) {
+                confirmDeleteBtn.onclick = performDelete;
+                console.log('✅ Delete button handler set');
+            }
+        }, 100);
+    }
+    
+    // Item Modal Functions
+    function openAddItemModal() {
+        console.log('➕ Opening add item modal');
+        editItem = null;
+        currentImageData = null;
+        
+        const modal = document.getElementById('itemModal');
+        const form = document.getElementById('itemForm');
+        const modalTitle = document.getElementById('itemModalTitle');
+        
+        if (!modal) {
+            console.error('❌ Item modal not found');
+            showToast('Item modal not found', 'error');
+            return;
+        }
+        
+        if (form) {
+            form.reset();
+            const isEditField = document.getElementById('isEdit');
+            if (isEditField) isEditField.value = 'false';
+            
+            // Clear image preview
+            const preview = document.getElementById('imagePreview');
+            if (preview) preview.style.display = 'none';
+            
+            // Hide reference number field
+            const refGroup = document.querySelector('label[for="referenceNo"]')?.parentElement;
+            if (refGroup) refGroup.style.display = 'none';
+            
+            // Set form handler
+            form.onsubmit = handleItemFormSubmit;
+        }
+        
+        if (modalTitle) modalTitle.textContent = 'Add New Item';
+        
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        const titleField = document.getElementById('title');
+        if (titleField) {
+            setTimeout(() => titleField.focus(), 100);
+        }
+        
+        console.log('✅ Add item modal opened successfully');
+    }
+    
+    function closeItemModal() {
+        console.log('❌ Closing item modal');
+        const modal = document.getElementById('itemModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            editItem = null;
+            currentImageData = null;
+        }
+    }
+    
+    function openCategoriesListModal() {
+        console.log('🏷️ Opening categories management modal');
+        const modal = document.getElementById('categoriesListModal');
+        
+        if (!modal) {
+            console.error('❌ Categories list modal not found');
+            showToast('Categories modal not found', 'error');
+            return;
+        }
+        
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        loadCategoriesTable();
+        
+        console.log('✅ Categories management modal opened successfully');
+    }
+    
+    function closeCategoriesListModal() {
+        console.log('❌ Closing categories list modal');
+        const modal = document.getElementById('categoriesListModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+    
+    function openAddCategoryModal() {
+        console.log('➕ Opening add category modal');
+        editCategory = null;
+        
+        closeCategoriesListModal();
+        
+        const modal = document.getElementById('categoryModal');
+        const form = document.getElementById('categoryForm');
+        const modalTitle = document.getElementById('categoryModalTitle');
+        const statusGroup = document.getElementById('categoryStatusGroup');
+        
+        if (!modal) {
+            console.error('❌ Category modal not found');
+            showToast('Category modal not found', 'error');
+            return;
+        }
+        
+        if (form) {
+            form.reset();
+            const isEditField = document.getElementById('isCategoryEdit');
+            if (isEditField) isEditField.value = 'false';
+            
+            // Set form handler
+            form.onsubmit = handleCategoryFormSubmit;
+        }
+        
+        if (modalTitle) modalTitle.textContent = 'Add New Category';
+        if (statusGroup) statusGroup.style.display = 'none';
+        
+        setTimeout(() => {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            const nameField = document.getElementById('categoryName');
+            if (nameField) nameField.focus();
+        }, 100);
+        
+        console.log('✅ Add category modal opened successfully');
+    }
+    
+    function closeCategoryModal() {
+        console.log('❌ Closing category modal');
+        const modal = document.getElementById('categoryModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            editCategory = null;
+        }
+        
+        setTimeout(() => {
+            openCategoriesListModal();
+        }, 100);
+    }
+    
+    function loadCategoriesTable() {
+        const tbody = document.getElementById('categoriesTableBody');
+        if (!tbody) return;
+        
+        if (currentCategories.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No categories found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = currentCategories.map(cat => `
+            <tr>
+                <td>${cat.id}</td>
+                <td>${cat.name}</td>
+                <td>${cat.description || 'No description'}</td>
+                <td><span class="badge status-active">Active</span></td>
+                <td>
+                    <button onclick="editCategory(${cat.id})" class="action-btn edit-btn" title="Edit Category">
+                        ✏️ Edit
+                    </button>
+                    <button onclick="deleteCategory(${cat.id})" class="action-btn delete-btn" title="Delete Category">
+                        🗑️ Delete
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+        
+        console.log('✅ Categories table loaded');
+    }
+    
+    function editItemFunc(id) {
+        console.log('✏️ Editing item:', id);
+        editItem = currentItems.find(item => item.id === id);
+        
+        if (!editItem) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const modal = document.getElementById('itemModal');
+        const modalTitle = document.getElementById('itemModalTitle');
+        const form = document.getElementById('itemForm');
+        
+        if (modal) {
+            // Fill form with item data
+            const fields = {
+                itemId: editItem.id,
+                title: editItem.title,
+                author: editItem.author,
+                categoryId: editItem.categoryId,
+                price: editItem.price,
+                offerPrice: editItem.offerPrice || '',
+                stock: editItem.stock,
+                description: editItem.description,
+                status: editItem.status,
+                isEdit: 'true'
+            };
+            
+            Object.keys(fields).forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) field.value = fields[fieldId];
+            });
+            
+            if (modalTitle) modalTitle.textContent = 'Edit Item';
+            
+            // Set current image data
+            currentImageData = editItem.imagePath;
+            
+            // Show existing image if available
+            if (editItem.imagePath && editItem.imagePath.trim() !== '') {
+                const preview = document.getElementById('imagePreview');
+                const img = document.getElementById('previewImg');
+                if (preview && img) {
+                    img.src = editItem.imagePath;
+                    preview.style.display = 'block';
+                }
+            }
+            
+            // Set form handler
+            if (form) {
+                form.onsubmit = handleItemFormSubmit;
+            }
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            const titleField = document.getElementById('title');
+            if (titleField) titleField.focus();
+        }
+    }
+    
+    function deleteItemFunc(id) {
+        console.log('🗑️ Confirming delete item:', id);
+        deleteItem = currentItems.find(item => item.id === id);
+        deleteCategory = null;
+        
+        if (!deleteItem) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const modal = document.getElementById('deleteModal');
+        const deleteType = document.getElementById('deleteType');
+        const deleteName = document.getElementById('deleteName');
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        
+        if (deleteType) deleteType.textContent = 'item';
+        if (deleteName) deleteName.textContent = deleteItem.title;
+        
+        // Set delete handler
+        if (confirmBtn) {
+            confirmBtn.onclick = performDelete;
+        }
+        
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    function editCategoryFunc(id) {
+        console.log('✏️ Editing category:', id);
+        editCategory = currentCategories.find(cat => cat.id === id);
+        
+        if (!editCategory) {
+            showToast('Category not found', 'error');
+            return;
+        }
+        
+        closeCategoriesListModal();
+        
+        const modal = document.getElementById('categoryModal');
+        const modalTitle = document.getElementById('categoryModalTitle');
+        const statusGroup = document.getElementById('categoryStatusGroup');
+        const form = document.getElementById('categoryForm');
+        
+        if (modal) {
+            const editIdField = document.getElementById('categoryIdEdit');
+            const nameField = document.getElementById('categoryName');
+            const descField = document.getElementById('categoryDescription');
+            const isEditField = document.getElementById('isCategoryEdit');
+            
+            if (editIdField) editIdField.value = editCategory.id;
+            if (nameField) nameField.value = editCategory.name;
+            if (descField) descField.value = editCategory.description || '';
+            if (isEditField) isEditField.value = 'true';
+            if (modalTitle) modalTitle.textContent = 'Edit Category';
+            if (statusGroup) statusGroup.style.display = 'block';
+            
+            // Set form handler
+            if (form) {
+                form.onsubmit = handleCategoryFormSubmit;
+            }
+            
+            setTimeout(() => {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                if (nameField) nameField.focus();
+            }, 100);
+        }
+    }
+    
+    function deleteCategoryFunc(id) {
+        console.log('🗑️ Confirming delete category:', id);
+        deleteCategory = currentCategories.find(cat => cat.id === id);
+        deleteItem = null;
+        
+        if (!deleteCategory) {
+            showToast('Category not found', 'error');
+            return;
+        }
+        
+        const modal = document.getElementById('deleteModal');
+        const deleteType = document.getElementById('deleteType');
+        const deleteName = document.getElementById('deleteName');
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        
+        if (deleteType) deleteType.textContent = 'category';
+        if (deleteName) deleteName.textContent = deleteCategory.name;
+        
+        // Set delete handler
+        if (confirmBtn) {
+            confirmBtn.onclick = performDelete;
+        }
+        
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    function closeDeleteModal() {
+        console.log('❌ Closing delete modal');
+        const modal = document.getElementById('deleteModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            deleteItem = null;
+            deleteCategory = null;
+        }
+    }
+    
+    // Form submission handlers
+    function handleItemFormSubmit(e) {
+        e.preventDefault();
+        console.log('📝 Submitting item form');
+        
+        const formData = new FormData(e.target);
+        const data = {};
+        
+        for (let [key, value] of formData.entries()) {
+            if (key !== 'imageUpload') {
+                data[key] = value.trim();
+            }
+        }
+        
+        // Add image data
+        data.imagePath = currentImageData || '';
+        
+        // Enhanced validation
+        const requiredFields = {
+            title: 'Title',
+            author: 'Author', 
+            categoryId: 'Category',
+            price: 'Price',
+            stock: 'Stock Quantity'
+        };
+        
+        const missingFields = [];
+        Object.keys(requiredFields).forEach(field => {
+            if (!data[field] || data[field] === '') {
+                missingFields.push(requiredFields[field]);
+            }
+        });
+        
+        if (missingFields.length > 0) {
+            showToast(`Please fill in required fields: ${missingFields.join(', ')}`, 'error');
+            return;
+        }
+        
+        // Validate numeric fields
+        if (isNaN(parseFloat(data.price)) || parseFloat(data.price) <= 0) {
+            showToast('Please enter a valid price', 'error');
+            return;
+        }
+        
+        if (isNaN(parseInt(data.stock)) || parseInt(data.stock) < 0) {
+            showToast('Please enter a valid stock quantity', 'error');
+            return;
+        }
+        
+        if (data.offerPrice && (isNaN(parseFloat(data.offerPrice)) || parseFloat(data.offerPrice) <= 0)) {
+            showToast('Please enter a valid offer price', 'error');
+            return;
+        }
+        
+        // Convert to proper format
+        data.price = parseFloat(data.price).toFixed(2);
+        data.stock = parseInt(data.stock);
+        if (data.offerPrice) {
+            data.offerPrice = parseFloat(data.offerPrice).toFixed(2);
+        }
+        
+        // Set default status if not provided
+        if (!data.status) {
+            data.status = 'active';
+        }
+        
+        const isEdit = data.isEdit === 'true';
+        const url = isEdit ? `${baseUrl}/admin/items/update` : `${baseUrl}/admin/items/create`;
+        
+        console.log('📤 Sending data:', data);
+        console.log('📡 URL:', url);
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitItemBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '🔄 Saving...';
+        }
+        
+        fetch(url, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
+            },
+            body: new URLSearchParams(data)
+        })
+            .then(response => {
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        console.error('❌ Server response:', text);
+                        throw new Error(`HTTP ${response.status}: ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('✅ Response data:', data);
+                if (data.success) {
+                    showToast(data.message || 'Item saved successfully', 'success');
+                    closeItemModal();
+                    loadItems();
+                    loadItemStats();
+                } else {
+                    showToast(data.message || 'Failed to save item', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Form submission error:', error);
+                showToast('Error saving item: ' + error.message, 'error');
+            })
+            .finally(() => {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="icon-save"></i> Save Item';
+                }
+            });
+    }
+    
+    function handleCategoryFormSubmit(e) {
+        e.preventDefault();
+        console.log('📝 Submitting category form');
+        
+        const formData = new FormData(e.target);
+        const data = {};
+        
+        for (let [key, value] of formData.entries()) {
+            data[key] = value.trim();
+        }
+        
+        if (!data.name) {
+            showToast('Category name is required', 'error');
+            return;
+        }
+        
+        const isEdit = data.isCategoryEdit === 'true';
+        const url = isEdit ? `${baseUrl}/admin/items/update-category` : `${baseUrl}/admin/items/create-category`;
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitCategoryBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '🔄 Saving...';
+        }
+        
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(data)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    
+                    const modal = document.getElementById('categoryModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                    editCategory = null;
+                    
+                    loadCategories();
+                    loadItemStats();
+                    
+                    setTimeout(() => {
+                        openCategoriesListModal();
+                    }, 200);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Category form submission error:', error);
+                showToast('Error saving category', 'error');
+            })
+            .finally(() => {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="icon-save"></i> Save Category';
+                }
+            });
+    }
+    
+    function performDelete() {
+        console.log('🗑️ Performing delete operation');
+        if (deleteItem) {
+            deleteItemConfirmed();
+        } else if (deleteCategory) {
+            deleteCategoryConfirmed();
+        } else {
+            console.error('❌ No item or category selected for deletion');
+            showToast('No item selected for deletion', 'error');
+        }
+    }
+    
+    function deleteItemConfirmed() {
+        console.log('🗑️ Deleting item:', deleteItem.id);
+        
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '🔄 Deleting...';
+        }
+        
+        fetch(`${baseUrl}/admin/items/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ itemId: deleteItem.id })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    closeDeleteModal();
+                    loadItems();
+                    loadItemStats();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Delete item error:', error);
+                showToast('Error deleting item', 'error');
+            })
+            .finally(() => {
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '<i class="icon-trash"></i> Delete';
+                }
+            });
+    }
+    
+    function deleteCategoryConfirmed() {
+        console.log('🗑️ Deleting category:', deleteCategory.id);
+        
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '🔄 Deleting...';
+        }
+        
+        fetch(`${baseUrl}/admin/items/delete-category`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ categoryId: deleteCategory.id })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    closeDeleteModal();
+                    loadCategories();
+                    loadItemStats();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Delete category error:', error);
+                showToast('Error deleting category', 'error');
+            })
+            .finally(() => {
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '<i class="icon-trash"></i> Delete';
+                }
+            });
+    }
+    
+    // Image handling functions
+    function previewImage(input) {
+        console.log('🖼️ Previewing image...');
+        
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            
+            // Validate file size (max 5MB for base64)
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Image size should be less than 5MB', 'error');
+                input.value = '';
+                return;
+            }
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                showToast('Please select a valid image file', 'error');
+                input.value = '';
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('imagePreview');
+                const img = document.getElementById('previewImg');
+                
+                if (img && preview) {
+                    currentImageData = e.target.result;
+                    img.src = e.target.result;
+                    preview.style.display = 'block';
+                    
+                    console.log('✅ Image converted to base64 successfully');
+                }
+            };
+            
+            reader.onerror = function() {
+                showToast('Error reading image file', 'error');
+                input.value = '';
+            };
+            
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    function removeImage() {
+        console.log('🗑️ Removing image...');
+        
+        const upload = document.getElementById('imageUpload');
+        const preview = document.getElementById('imagePreview');
+        const img = document.getElementById('previewImg');
+        
+        if (upload) upload.value = '';
+        if (preview) preview.style.display = 'none';
+        if (img) img.src = '';
+        
+        currentImageData = null;
+        
+        console.log('✅ Image removed successfully');
+    }
+    
     function makeItemFunctionsGlobal() {
-        window.editItemFunc = function(id) { console.log('Edit item:', id); };
-        window.deleteItemFunc = function(id) { console.log('Delete item:', id); };
+        window.editItemFunc = editItemFunc;
+        window.deleteItemFunc = deleteItemFunc;
+        window.editCategory = editCategoryFunc;
+        window.deleteCategory = deleteCategoryFunc;
         window.loadItems = loadItems;
         window.loadCategories = loadCategories;
         window.filterItems = loadItems;
+        window.openAddItemModal = openAddItemModal;
+        window.closeItemModal = closeItemModal;
+        window.openCategoriesListModal = openCategoriesListModal;
+        window.closeCategoriesListModal = closeCategoriesListModal;
+        window.openAddCategoryModal = openAddCategoryModal;
+        window.closeCategoryModal = closeCategoryModal;
+        window.closeDeleteModal = closeDeleteModal;
+        window.previewImage = previewImage;
+        window.removeImage = removeImage;
+        window.performDelete = performDelete;
+        window.handleItemFormSubmit = handleItemFormSubmit;
+        window.handleCategoryFormSubmit = handleCategoryFormSubmit;
+        window.hideToast = hideToast;
         
         console.log('✅ Item functions made global');
     }
     
-    // Toast notification
+    // Global modal and keyboard event handling
+    document.addEventListener('click', (e) => {
+        // Modal outside click handling
+        const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal'];
+        modals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal && e.target === modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // Close all modals on escape
+            const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal'];
+            modals.forEach(modalId => {
+                const modal = document.getElementById(modalId);
+                if (modal && modal.style.display === 'block') {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            });
+            
+            const toast = document.getElementById('messageToast') || document.getElementById('toast');
+            if (toast) {
+                toast.classList.remove('show');
+            }
+        }
+    });
+    
+    // Toast notification function
     function showToast(message, type = 'info') {
         console.log(`📢 ${type.toUpperCase()}: ${message}`);
         
@@ -692,12 +1860,22 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.className = `toast ${type} show`;
             
             setTimeout(() => {
-                toast.classList.remove('show');
+                hideToast();
             }, 4000);
         }
     }
     
-    // Load default page
+    function hideToast() {
+        const toast = document.getElementById('messageToast') || document.getElementById('toast');
+        if (toast) {
+            toast.classList.remove('show');
+        }
+    }
+    
+    // Make toast function global
+    window.showToast = showToast;
+    
+    // Load default page after initialization
     setTimeout(() => {
         const defaultLink = document.querySelector('.nav-link[data-page*="admin-Manage-Users.jsp"]');
         if (defaultLink) {
@@ -713,8 +1891,17 @@ document.addEventListener('DOMContentLoaded', () => {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast { opacity: 0; transform: translateY(-20px); transition: all 0.3s ease; }
+        .toast.show { 
+            opacity: 1; 
+            transform: translateY(0); 
+            visibility: visible;
+        }
+        .toast { 
+            opacity: 0; 
+            transform: translateY(-20px); 
+            transition: all 0.3s ease;
+            visibility: hidden;
+        }
     `;
     document.head.appendChild(style);
     

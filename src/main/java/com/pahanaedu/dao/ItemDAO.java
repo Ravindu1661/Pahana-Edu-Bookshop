@@ -112,65 +112,180 @@ public class ItemDAO {
      * Generate unique reference number
      */
     public String generateReferenceNumber() {
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(GET_NEXT_REFERENCE_NUMBER)) {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
+        
+        try {
+            connection = DatabaseConnection.getConnection();
+            statement = connection.prepareStatement(GET_NEXT_REFERENCE_NUMBER);
             
-            ResultSet resultSet = statement.executeQuery();
+            resultSet = statement.executeQuery();
             
             if (resultSet.next()) {
                 int nextNumber = resultSet.getInt(1);
-                return String.format("REF-%03d", nextNumber);
+                String refNo = String.format("REF-%04d", nextNumber); // 4-digit padding
+                System.out.println("ItemDAO: Generated reference number: " + refNo);
+                return refNo;
             }
             
         } catch (SQLException e) {
             System.err.println("ItemDAO: Error generating reference number - " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            try {
+                if (resultSet != null) resultSet.close();
+                if (statement != null) statement.close();
+                if (connection != null) connection.close();
+            } catch (SQLException e) {
+                System.err.println("ItemDAO: Error closing resources in generateReferenceNumber - " + e.getMessage());
+            }
         }
         
         // Fallback to timestamp-based reference
-        return "REF-" + System.currentTimeMillis();
+        long timestamp = System.currentTimeMillis();
+        String fallbackRef = "REF-" + timestamp;
+        System.out.println("ItemDAO: Using fallback reference number: " + fallbackRef);
+        return fallbackRef;
     }
-    
     /**
      * Create new item
      */
     public boolean createItem(Item item) {
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(INSERT_ITEM, Statement.RETURN_GENERATED_KEYS)) {
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet generatedKeys = null;
+        
+        try {
+            connection = DatabaseConnection.getConnection();
             
             // Generate reference number if not provided
             if (item.getReferenceNo() == null || item.getReferenceNo().trim().isEmpty()) {
-                item.setReferenceNo(generateReferenceNumber());
+                String refNo = generateReferenceNumber();
+                item.setReferenceNo(refNo);
+                System.out.println("ItemDAO: Generated reference number: " + refNo);
             }
             
-            statement.setString(1, item.getTitle());
-            statement.setString(2, item.getAuthor());
+            // Ensure reference number is unique
+            int attempts = 0;
+            while (referenceExists(item.getReferenceNo()) && attempts < 5) {
+                String newRefNo = generateReferenceNumber();
+                item.setReferenceNo(newRefNo);
+                attempts++;
+                System.out.println("ItemDAO: Reference conflict, trying new: " + newRefNo);
+            }
+            
+            if (attempts >= 5) {
+                System.err.println("ItemDAO: Failed to generate unique reference number after 5 attempts");
+                return false;
+            }
+            
+            System.out.println("ItemDAO: Final reference number: " + item.getReferenceNo());
+            
+            // Prepare statement
+            statement = connection.prepareStatement(INSERT_ITEM, Statement.RETURN_GENERATED_KEYS);
+            
+            // Set parameters with null checks
+            statement.setString(1, item.getTitle() != null ? item.getTitle().trim() : "");
+            statement.setString(2, item.getAuthor() != null ? item.getAuthor().trim() : "");
             statement.setInt(3, item.getCategoryId());
             statement.setBigDecimal(4, item.getPrice());
-            statement.setBigDecimal(5, item.getOfferPrice());
-            statement.setInt(6, item.getStock());
-            statement.setString(7, item.getDescription());
-            statement.setString(8, item.getImagePath());
-            statement.setString(9, item.getReferenceNo());
-            statement.setString(10, item.getStatus());
             
+            // Handle offer price (can be null)
+            if (item.getOfferPrice() != null) {
+                statement.setBigDecimal(5, item.getOfferPrice());
+            } else {
+                statement.setNull(5, java.sql.Types.DECIMAL);
+            }
+            
+            statement.setInt(6, item.getStock());
+            
+            // Handle description (can be null)
+            if (item.getDescription() != null && !item.getDescription().trim().isEmpty()) {
+                statement.setString(7, item.getDescription().trim());
+            } else {
+                statement.setNull(7, java.sql.Types.LONGVARCHAR);
+            }
+            
+            // Handle image path (can be null)
+            if (item.getImagePath() != null && !item.getImagePath().trim().isEmpty()) {
+                statement.setString(8, item.getImagePath().trim());
+            } else {
+                statement.setNull(8, java.sql.Types.LONGVARCHAR);
+            }
+            
+            // Reference number (NOT NULL in database)
+            statement.setString(9, item.getReferenceNo());
+            
+            // Status with default
+            String status = item.getStatus();
+            if (status == null || status.trim().isEmpty()) {
+                status = "active"; // Default status
+            }
+            statement.setString(10, status);
+            
+            // Debug: Print the prepared statement parameters
+            System.out.println("ItemDAO: Executing INSERT with parameters:");
+            System.out.println("  1. title = " + item.getTitle());
+            System.out.println("  2. author = " + item.getAuthor());
+            System.out.println("  3. category_id = " + item.getCategoryId());
+            System.out.println("  4. price = " + item.getPrice());
+            System.out.println("  5. offer_price = " + item.getOfferPrice());
+            System.out.println("  6. stock = " + item.getStock());
+            System.out.println("  7. description = " + (item.getDescription() != null ? item.getDescription().length() + " chars" : "null"));
+            System.out.println("  8. image_path = " + (item.getImagePath() != null ? item.getImagePath().length() + " chars" : "null"));
+            System.out.println("  9. reference_no = " + item.getReferenceNo());
+            System.out.println("  10. status = " + status);
+            
+            // Execute the statement
             int rowsAffected = statement.executeUpdate();
             
             if (rowsAffected > 0) {
-                ResultSet generatedKeys = statement.getGeneratedKeys();
+                // Get generated ID
+                generatedKeys = statement.getGeneratedKeys();
                 if (generatedKeys.next()) {
                     item.setId(generatedKeys.getInt(1));
+                    System.out.println("ItemDAO: Item created successfully - ID: " + item.getId() + ", Title: " + item.getTitle());
+                    return true;
+                } else {
+                    System.err.println("ItemDAO: No generated keys returned");
+                    return false;
                 }
-                System.out.println("ItemDAO: Item created successfully - " + item.getTitle());
-                return true;
+            } else {
+                System.err.println("ItemDAO: No rows affected during insert");
+                return false;
             }
             
         } catch (SQLException e) {
-            System.err.println("ItemDAO: Error creating item - " + e.getMessage());
+            System.err.println("ItemDAO: SQL Error creating item - " + e.getMessage());
+            System.err.println("ItemDAO: SQL State: " + e.getSQLState());
+            System.err.println("ItemDAO: Error Code: " + e.getErrorCode());
             e.printStackTrace();
+            
+            // Check for specific SQL errors
+            if (e.getErrorCode() == 1062) { // Duplicate entry
+                System.err.println("ItemDAO: Duplicate reference number detected");
+            } else if (e.getErrorCode() == 1364) { // Field doesn't have default value
+                System.err.println("ItemDAO: Missing required field value");
+            } else if (e.getErrorCode() == 1452) { // Foreign key constraint
+                System.err.println("ItemDAO: Invalid category_id - foreign key constraint failed");
+            }
+            
+            return false;
+        } catch (Exception e) {
+            System.err.println("ItemDAO: Unexpected error creating item - " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        } finally {
+            // Clean up resources
+            try {
+                if (generatedKeys != null) generatedKeys.close();
+                if (statement != null) statement.close();
+                if (connection != null) connection.close();
+            } catch (SQLException e) {
+                System.err.println("ItemDAO: Error closing resources - " + e.getMessage());
+            }
         }
-        
-        return false;
     }
     
     /**
