@@ -16,9 +16,9 @@
     
     <!-- CSS Files -->
     <link rel="stylesheet" href="assets/css/Admin/admin-dashboard.css">
-    <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Users.ss">
-    <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Item.ss">
-    <link rel="stylesheet" href="assets/css/Admin/admin-Billing.ss">
+   <!-- <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Users.css">
+    <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Item.css">
+    <link rel="stylesheet" href="assets/css/Admin/admin-Billing.css"> -->
     
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
