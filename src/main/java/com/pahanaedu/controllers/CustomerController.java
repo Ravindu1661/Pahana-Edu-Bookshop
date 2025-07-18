@@ -2,6 +2,7 @@ package com.pahanaedu.controllers;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.util.List;
 
 import javax.servlet.ServletException;
@@ -14,13 +15,15 @@ import javax.servlet.http.HttpSession;
 import com.pahanaedu.dao.CategoryDAO;
 import com.pahanaedu.dao.ItemDAO;
 import com.pahanaedu.dao.CartDAO;
+import com.pahanaedu.dao.PromoCodeDAO;
 import com.pahanaedu.models.Category;
 import com.pahanaedu.models.Item;
 import com.pahanaedu.models.Cart;
 import com.pahanaedu.models.User;
+import com.pahanaedu.models.PromoCode;
 
 /**
- * Customer Controller - Handles customer-facing operations
+ * Customer Controller - Handles customer-facing operations with Promo Code Integration
  * Only accessible by users with CUSTOMER role
  */
 @WebServlet("/customer/*")
@@ -30,6 +33,7 @@ public class CustomerController extends HttpServlet {
     private ItemDAO itemDAO;
     private CategoryDAO categoryDAO;
     private CartDAO cartDAO;
+    private PromoCodeDAO promoCodeDAO;
     
     @Override
     public void init() throws ServletException {
@@ -37,7 +41,8 @@ public class CustomerController extends HttpServlet {
             itemDAO = new ItemDAO();
             categoryDAO = new CategoryDAO();
             cartDAO = new CartDAO();
-            System.out.println("CustomerController: DAOs initialized successfully");
+            promoCodeDAO = new PromoCodeDAO();
+            System.out.println("CustomerController: DAOs initialized successfully with PromoCode support");
         } catch (Exception e) {
             System.err.println("CustomerController: Failed to initialize DAOs - " + e.getMessage());
             throw new ServletException("Failed to initialize DAOs", e);
@@ -116,7 +121,10 @@ public class CustomerController extends HttpServlet {
                 handleClearCart(request, response);
                 break;
             case "/cart/apply-promo":
-                handleApplyPromo(request, response);
+                handleApplyPromoCode(request, response);
+                break;
+            case "/cart/validate-promo":
+                handleValidatePromoCode(request, response);
                 break;
             default:
                 sendErrorResponse(response, "Invalid operation");
@@ -572,9 +580,103 @@ public class CustomerController extends HttpServlet {
     }
     
     /**
-     * Handle apply promo code request
+     * Handle apply promo code request - UPDATED WITH REAL PROMO CODE INTEGRATION
      */
-    private void handleApplyPromo(HttpServletRequest request, HttpServletResponse response) 
+    private void handleApplyPromoCode(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            Integer userId = getCurrentUserId(request);
+            if (userId == null) {
+                sendErrorResponse(response, "User not logged in");
+                return;
+            }
+            
+            String promoCode = request.getParameter("promoCode");
+            
+            if (promoCode == null || promoCode.trim().isEmpty()) {
+                sendErrorResponse(response, "Promo code is required");
+                return;
+            }
+            
+            // Get cart total for validation
+            List<Cart> cartItems = cartDAO.getCartItems(userId);
+            if (cartItems.isEmpty()) {
+                sendErrorResponse(response, "Cart is empty");
+                return;
+            }
+            
+            // Calculate cart total
+            BigDecimal cartTotal = BigDecimal.ZERO;
+            for (Cart cartItem : cartItems) {
+                BigDecimal itemTotal = cartItem.getEffectivePrice().multiply(new BigDecimal(cartItem.getQuantity()));
+                cartTotal = cartTotal.add(itemTotal);
+            }
+            
+            System.out.println("CustomerController: Applying promo code '" + promoCode + "' for cart total: Rs. " + cartTotal);
+            
+            // Get promo code from database
+            PromoCode promoCodeObj = promoCodeDAO.getPromoCodeByCode(promoCode.trim().toUpperCase());
+            
+            if (promoCodeObj == null) {
+                System.out.println("CustomerController: Promo code not found: " + promoCode);
+                sendErrorResponse(response, "Invalid promo code");
+                return;
+            }
+            
+            // Validate promo code
+            if (!promoCodeObj.isValidForOrder(cartTotal)) {
+                String reason = getValidationFailureReason(promoCodeObj, cartTotal);
+                System.out.println("CustomerController: Promo code validation failed: " + reason);
+                sendErrorResponse(response, reason);
+                return;
+            }
+            
+            // Calculate discount
+            BigDecimal discountAmount = promoCodeObj.calculateDiscount(cartTotal);
+            
+            // Store promo code in session for checkout
+            HttpSession session = request.getSession();
+            session.setAttribute("appliedPromoCode", promoCodeObj.getCode());
+            session.setAttribute("promoDiscountAmount", discountAmount);
+            
+            // Build success response
+            StringBuilder jsonResponse = new StringBuilder();
+            jsonResponse.append("{")
+                .append("\"success\": true,")
+                .append("\"message\": \"Promo code applied successfully\",")
+                .append("\"promoCode\": \"").append(escapeJsonString(promoCodeObj.getCode())).append("\",")
+                .append("\"discountType\": \"").append(escapeJsonString(promoCodeObj.getDiscountType())).append("\",")
+                .append("\"discountValue\": ").append(promoCodeObj.getDiscountValue()).append(",")
+                .append("\"discountAmount\": ").append(discountAmount).append(",")
+                .append("\"cartTotal\": ").append(cartTotal).append(",")
+                .append("\"finalTotal\": ").append(cartTotal.subtract(discountAmount)).append(",")
+                .append("\"description\": \"").append(escapeJsonString(promoCodeObj.getDescription() != null ? promoCodeObj.getDescription() : "")).append("\"")
+                .append("}");
+            
+            out.print(jsonResponse.toString());
+            
+            System.out.println("CustomerController: Promo code applied successfully - Code: " + promoCodeObj.getCode() + 
+                             ", Discount: Rs. " + discountAmount);
+            
+        } catch (Exception e) {
+            System.err.println("CustomerController: Error applying promo code - " + e.getMessage());
+            e.printStackTrace();
+            sendErrorResponse(response, "Error applying promo code: " + e.getMessage());
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle validate promo code request (for frontend validation)
+     */
+    private void handleValidatePromoCode(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -584,42 +686,89 @@ public class CustomerController extends HttpServlet {
         
         try {
             String promoCode = request.getParameter("promoCode");
+            String orderAmountStr = request.getParameter("orderAmount");
             
             if (promoCode == null || promoCode.trim().isEmpty()) {
                 sendErrorResponse(response, "Promo code is required");
                 return;
             }
             
-            // Demo promo codes
-            double discount = 0;
-            String message = "";
-            
-            switch (promoCode.toUpperCase()) {
-                case "SAVE10":
-                    discount = 0.10; // 10% discount
-                    message = "10% discount applied";
-                    break;
-                case "SAVE20":
-                    discount = 0.20; // 20% discount
-                    message = "20% discount applied";
-                    break;
-                case "FREESHIP":
-                    discount = 250; // Free shipping (Rs. 250)
-                    message = "Free shipping applied";
-                    break;
-                default:
-                    sendErrorResponse(response, "Invalid promo code");
+            BigDecimal orderAmount = BigDecimal.ZERO;
+            if (orderAmountStr != null && !orderAmountStr.trim().isEmpty()) {
+                try {
+                    orderAmount = new BigDecimal(orderAmountStr);
+                } catch (NumberFormatException e) {
+                    sendErrorResponse(response, "Invalid order amount");
                     return;
+                }
             }
             
-            out.print("{\"success\": true, \"message\": \"" + message + "\", \"discount\": " + discount + "}");
+            // Get promo code from database
+            PromoCode promoCodeObj = promoCodeDAO.getPromoCodeByCode(promoCode.trim().toUpperCase());
+            
+            if (promoCodeObj == null) {
+                sendErrorResponse(response, "Promo code not found");
+                return;
+            }
+            
+            if (!promoCodeObj.isValidForOrder(orderAmount)) {
+                String reason = getValidationFailureReason(promoCodeObj, orderAmount);
+                sendErrorResponse(response, reason);
+                return;
+            }
+            
+            BigDecimal discountAmount = promoCodeObj.calculateDiscount(orderAmount);
+            
+            StringBuilder jsonResponse = new StringBuilder();
+            jsonResponse.append("{")
+                .append("\"success\": true,")
+                .append("\"message\": \"Promo code is valid\",")
+                .append("\"promoCode\": \"").append(escapeJsonString(promoCodeObj.getCode())).append("\",")
+                .append("\"discountType\": \"").append(escapeJsonString(promoCodeObj.getDiscountType())).append("\",")
+                .append("\"discountValue\": ").append(promoCodeObj.getDiscountValue()).append(",")
+                .append("\"discountAmount\": ").append(discountAmount).append(",")
+                .append("\"description\": \"").append(escapeJsonString(promoCodeObj.getDescription() != null ? promoCodeObj.getDescription() : "")).append("\"")
+                .append("}");
+            
+            out.print(jsonResponse.toString());
             
         } catch (Exception e) {
-            System.err.println("CustomerController: Error applying promo - " + e.getMessage());
-            sendErrorResponse(response, "Error applying promo code");
+            System.err.println("CustomerController: Error validating promo code - " + e.getMessage());
+            sendErrorResponse(response, "Error validating promo code: " + e.getMessage());
         } finally {
             out.close();
         }
+    }
+    
+    /**
+     * Get validation failure reason for promo code
+     */
+    private String getValidationFailureReason(PromoCode promoCode, BigDecimal orderAmount) {
+        if (!"active".equals(promoCode.getStatus())) {
+            return "Promo code is not active";
+        }
+        
+        java.sql.Date today = new java.sql.Date(System.currentTimeMillis());
+        if (promoCode.getEndDate().before(today)) {
+            return "Promo code has expired";
+        }
+        
+        if (promoCode.getStartDate().after(today)) {
+            return "Promo code is not yet valid";
+        }
+        
+        if (promoCode.getUsageLimit() != null && 
+            promoCode.getUsageCount() >= promoCode.getUsageLimit()) {
+            return "Promo code usage limit reached";
+        }
+        
+        if (promoCode.getMinimumOrderAmount() != null && 
+            orderAmount.compareTo(promoCode.getMinimumOrderAmount()) < 0) {
+            return "Order amount does not meet minimum requirement of Rs. " + 
+                   promoCode.getMinimumOrderAmount();
+        }
+        
+        return "Promo code is not valid";
     }
     
     /**
@@ -709,6 +858,7 @@ public class CustomerController extends HttpServlet {
         itemDAO = null;
         categoryDAO = null;
         cartDAO = null;
+        promoCodeDAO = null;
         super.destroy();
     }
 }

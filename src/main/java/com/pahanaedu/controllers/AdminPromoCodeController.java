@@ -134,15 +134,43 @@ public class AdminPromoCodeController extends HttpServlet {
     }
     
     /**
-     * Get current admin user ID
+     * Get current admin user ID - FIXED VERSION
      */
     private int getCurrentAdminId(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
+            // Try different session attribute names
             Integer userId = (Integer) session.getAttribute("userId");
-            return userId != null ? userId : 0;
+            if (userId == null) {
+                userId = (Integer) session.getAttribute("user_id");
+            }
+            if (userId == null) {
+                userId = (Integer) session.getAttribute("id");
+            }
+            if (userId == null) {
+                // Try user object
+                Object userObj = session.getAttribute("user");
+                if (userObj != null) {
+                    try {
+                        // Assuming user object has getId() method
+                        java.lang.reflect.Method getIdMethod = userObj.getClass().getMethod("getId");
+                        userId = (Integer) getIdMethod.invoke(userObj);
+                    } catch (Exception e) {
+                        System.err.println("Error getting user ID from user object: " + e.getMessage());
+                    }
+                }
+            }
+            
+            if (userId != null && userId > 0) {
+                System.out.println("DEBUG: Found admin user ID: " + userId);
+                return userId;
+            }
         }
-        return 0;
+        
+        System.err.println("WARNING: Could not find valid admin user ID in session, using default admin ID: 1");
+        // Return a default admin user ID (assuming there's an admin user with ID 1)
+        // You should replace this with a valid admin user ID from your database
+        return 1;
     }
     
     /**
@@ -256,7 +284,7 @@ public class AdminPromoCodeController extends HttpServlet {
     }
     
     /**
-     * Handle create promo code
+     * Handle create promo code - FIXED VERSION
      */
     private void handleCreatePromoCode(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -266,6 +294,10 @@ public class AdminPromoCodeController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
+            // Get current admin ID first and validate
+            int currentAdminId = getCurrentAdminId(request);
+            System.out.println("DEBUG: Creating promo code with admin ID: " + currentAdminId);
+            
             // Get form parameters
             String code = request.getParameter("code");
             String description = request.getParameter("description");
@@ -276,6 +308,14 @@ public class AdminPromoCodeController extends HttpServlet {
             String startDateStr = request.getParameter("startDate");
             String endDateStr = request.getParameter("endDate");
             String status = request.getParameter("status");
+            
+            // Debug log parameters
+            System.out.println("DEBUG: Promo code parameters:");
+            System.out.println("  Code: " + code);
+            System.out.println("  Description: " + description);
+            System.out.println("  Discount Type: " + discountType);
+            System.out.println("  Discount Value: " + discountValueStr);
+            System.out.println("  Status: " + status);
             
             // Validation
             if (code == null || code.trim().isEmpty()) {
@@ -309,7 +349,7 @@ public class AdminPromoCodeController extends HttpServlet {
             }
             
             // Validate percentage discount
-            if (PromoCode.TYPE_PERCENTAGE.equals(discountType) && 
+            if ("percentage".equals(discountType) && 
                 discountValue.compareTo(new BigDecimal(100)) > 0) {
                 sendErrorResponse(response, "Percentage discount cannot exceed 100%");
                 return;
@@ -357,13 +397,27 @@ public class AdminPromoCodeController extends HttpServlet {
                 return;
             }
             
+            // Fix discount type mapping
+            String mappedDiscountType = discountType;
+            if ("percentage".equals(discountType)) {
+                mappedDiscountType = "percentage";
+            } else if ("amount".equals(discountType)) {
+                mappedDiscountType = "fixed";
+            }
+            
             // Create promo code object
-            PromoCode promoCode = new PromoCode(code.trim(), description, discountType, 
+            PromoCode promoCode = new PromoCode(code.trim().toUpperCase(), description, mappedDiscountType, 
                                               discountValue, startDate, endDate);
             promoCode.setMinimumOrderAmount(minimumOrderAmount);
             promoCode.setUsageLimit(usageLimit);
-            promoCode.setStatus(status != null ? status : PromoCode.STATUS_ACTIVE);
-            promoCode.setCreatedBy(getCurrentAdminId(request));
+            promoCode.setStatus(status != null ? status : "active");
+            promoCode.setCreatedBy(currentAdminId);
+            
+            System.out.println("DEBUG: PromoCode object created:");
+            System.out.println("  ID: " + promoCode.getId());
+            System.out.println("  Code: " + promoCode.getCode());
+            System.out.println("  Created By: " + promoCode.getCreatedBy());
+            System.out.println("  Discount Type: " + promoCode.getDiscountType());
             
             // Save to database
             if (promoCodeDAO.createPromoCode(promoCode)) {
@@ -374,7 +428,7 @@ public class AdminPromoCodeController extends HttpServlet {
                 
                 out.print(responseObj.toString());
                 
-                System.out.println("DEBUG: Created promo code - " + promoCode.getCode());
+                System.out.println("DEBUG: Created promo code successfully - " + promoCode.getCode());
             } else {
                 sendErrorResponse(response, "Failed to create promo code");
             }
@@ -457,7 +511,15 @@ public class AdminPromoCodeController extends HttpServlet {
                 return;
             }
             
-            if (PromoCode.TYPE_PERCENTAGE.equals(discountType) && 
+            // Fix discount type mapping
+            String mappedDiscountType = discountType;
+            if ("percentage".equals(discountType)) {
+                mappedDiscountType = "percentage";
+            } else if ("amount".equals(discountType)) {
+                mappedDiscountType = "fixed";
+            }
+            
+            if ("percentage".equals(mappedDiscountType) && 
                 discountValue.compareTo(new BigDecimal(100)) > 0) {
                 sendErrorResponse(response, "Percentage discount cannot exceed 100%");
                 return;
@@ -502,15 +564,15 @@ public class AdminPromoCodeController extends HttpServlet {
             }
             
             // Update promo code object
-            existingPromoCode.setCode(code.trim());
+            existingPromoCode.setCode(code.trim().toUpperCase());
             existingPromoCode.setDescription(description);
-            existingPromoCode.setDiscountType(discountType);
+            existingPromoCode.setDiscountType(mappedDiscountType);
             existingPromoCode.setDiscountValue(discountValue);
             existingPromoCode.setMinimumOrderAmount(minimumOrderAmount);
             existingPromoCode.setUsageLimit(usageLimit);
             existingPromoCode.setStartDate(startDate);
             existingPromoCode.setEndDate(endDate);
-            existingPromoCode.setStatus(status != null ? status : PromoCode.STATUS_ACTIVE);
+            existingPromoCode.setStatus(status != null ? status : "active");
             
             // Update in database
             if (promoCodeDAO.updatePromoCode(existingPromoCode)) {
@@ -617,7 +679,7 @@ public class AdminPromoCodeController extends HttpServlet {
                 }
             }
             
-            PromoCode promoCode = promoCodeDAO.getPromoCodeByCode(code.trim());
+            PromoCode promoCode = promoCodeDAO.getPromoCodeByCode(code.trim().toUpperCase());
             
             if (promoCode == null) {
                 sendErrorResponse(response, "Promo code not found");
@@ -654,15 +716,15 @@ public class AdminPromoCodeController extends HttpServlet {
      * Get validation failure reason
      */
     private String getValidationFailureReason(PromoCode promoCode, BigDecimal orderAmount) {
-        if (!promoCode.isActive()) {
+        if (!"active".equals(promoCode.getStatus())) {
             return "Promo code is not active";
         }
         
-        if (promoCode.isExpired()) {
+        Date today = new Date(System.currentTimeMillis());
+        if (promoCode.getEndDate().before(today)) {
             return "Promo code has expired";
         }
         
-        Date today = new Date(System.currentTimeMillis());
         if (promoCode.getStartDate().after(today)) {
             return "Promo code is not yet valid";
         }

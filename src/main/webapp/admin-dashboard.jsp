@@ -18,7 +18,8 @@
     <link rel="stylesheet" href="assets/css/Admin/admin-dashboard.css">
    <!-- <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Users.css">
     <link rel="stylesheet" href="assets/css/Admin/admin-Manage-Item.css">
-    <link rel="stylesheet" href="assets/css/Admin/admin-Billing.css"> -->
+    <link rel="stylesheet" href="assets/css/Admin/admin-Billing.css">
+    <link rel="stylesheet" href="assets/css/Admin/admin-Promo-Codes.css"> -->
     
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -48,6 +49,12 @@
                         <a href="#" data-page="Admin/admin-Billing.jsp" class="nav-link">
                             <i class="fas fa-credit-card"></i>
                             <span> Billing & Orders</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="Admin/admin-Promo-Codes.jsp" class="nav-link">
+                            <i class="fas fa-ticket-alt"></i>
+                            <span> Promo Code Management</span>
                         </a>
                     </li>
                     <li>
@@ -102,6 +109,10 @@
                             <div class="quick-stat-item">
                                 <i class="fas fa-box"></i>
                                 <span>Manage Items</span>
+                            </div>
+                            <div class="quick-stat-item">
+                                <i class="fas fa-ticket-alt"></i>
+                                <span>Promo Codes</span>
                             </div>
                             <div class="quick-stat-item">
                                 <i class="fas fa-chart-bar"></i>

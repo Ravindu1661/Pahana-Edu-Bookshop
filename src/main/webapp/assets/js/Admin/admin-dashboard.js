@@ -1,5 +1,5 @@
 // 🚀 Pahana Edu Admin Dashboard - Main JavaScript File
-// This file contains all functionality for User Management, Item Management, and Billing
+// This file contains all functionality for User Management, Item Management, Billing, and Promo Code Management
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Pahana Edu Admin Dashboard loaded');
@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentItems = [];
     let currentCategories = [];
     let currentOrders = [];
+    let currentPromoCodes = [];
     
     // Current edit/delete items
     let currentEditUser = null;
@@ -34,6 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let deleteCategory = null;
     let currentOrderDetails = null;
     let currentImageData = null;
+    let currentEditPromoCode = null;
+    let currentDeletePromoCode = null;
     
     // Initialize dashboard
     initializeDashboard();
@@ -173,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentItems = [];
         currentCategories = [];
         currentOrders = [];
+        currentPromoCodes = [];
         currentEditUser = null;
         currentDeleteUser = null;
         editItem = null;
@@ -181,6 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteCategory = null;
         currentOrderDetails = null;
         currentImageData = null;
+        currentEditPromoCode = null;
+        currentDeletePromoCode = null;
         
         console.log('✅ Force cleanup completed');
     }
@@ -200,6 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (page.includes('admin-Billing.jsp')) {
             console.log('💳 Initializing Billing Management...');
             initializeBillingManagement();
+        } else if (page.includes('admin-Promo-Codes.jsp')) {
+            console.log('🎫 Initializing Promo Code Management...');
+            initializePromoCodeManagement();
         } else if (page.includes('admin-System-Settings.jsp')) {
             console.log('⚙️ Initializing System Settings...');
             initializeSystemSettings();
@@ -920,6 +929,600 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==========================================
+    // PROMO CODE MANAGEMENT FUNCTIONS
+    // ==========================================
+    
+    /**
+     * Initialize Promo Code Management
+     */
+    function initializePromoCodeManagement() {
+        console.log('🎫 Initializing Promo Code Management...');
+        
+        const requiredElements = ['totalCodes', 'activeCodes', 'promoCodesTableBody'];
+        const missingElements = requiredElements.filter(id => !document.getElementById(id));
+        
+        if (missingElements.length > 0) {
+            console.warn('⚠️ Missing promo code elements:', missingElements);
+            setTimeout(() => initializePromoCodeManagement(), 500);
+            return;
+        }
+        
+        console.log('✅ Promo code elements found, loading data...');
+        loadPromoCodeStats();
+        loadPromoCodes();
+        setupPromoCodeEvents();
+        makePromoCodeFunctionsGlobal();
+    }
+    
+    /**
+     * Load promo code statistics
+     */
+    function loadPromoCodeStats() {
+        console.log('📊 Loading promo code statistics...');
+        fetch(`${baseUrl}/admin/promo-stats`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updatePromoCodeStatsUI(data.stats);
+            } else {
+                showPromoCodeStatsError(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Promo code stats error:', error);
+            showPromoCodeStatsError(error.message);
+        });
+    }
+    
+    /**
+     * Update promo code stats UI
+     */
+    function updatePromoCodeStatsUI(stats) {
+        const elements = {
+            totalCodes: document.getElementById('totalCodes'),
+            activeCodes: document.getElementById('activeCodes'),
+            inactiveCodes: document.getElementById('inactiveCodes'),
+            expiredCodes: document.getElementById('expiredCodes'),
+            totalUsage: document.getElementById('totalUsage')
+        };
+        
+        Object.keys(elements).forEach(key => {
+            if (elements[key]) {
+                elements[key].textContent = stats[key] || 0;
+            }
+        });
+    }
+    
+    /**
+     * Show promo code stats error
+     */
+    function showPromoCodeStatsError(message) {
+        const elements = ['totalCodes', 'activeCodes', 'inactiveCodes', 'expiredCodes', 'totalUsage'];
+        elements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.textContent = 'Error';
+        });
+        showToast('Promo code statistics error: ' + message, 'error');
+    }
+    
+    /**
+     * Load promo codes
+     */
+    function loadPromoCodes() {
+        console.log('🎫 Loading promo codes...');
+        const tbody = document.getElementById('promoCodesTableBody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '<tr><td colspan="9" class="loading">🔄 Loading promo codes...</td></tr>';
+        
+        // Get filter values
+        const statusFilter = document.getElementById('statusFilter');
+        const statusValue = statusFilter ? statusFilter.value : '';
+        
+        let promoCodesUrl = `${baseUrl}/admin/promo-codes`;
+        const params = new URLSearchParams();
+        if (statusValue) params.append('status', statusValue);
+        if (params.toString()) promoCodesUrl += '?' + params.toString();
+        
+        fetch(promoCodesUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                currentPromoCodes = data.promoCodes || [];
+                displayPromoCodes(currentPromoCodes);
+            } else {
+                showPromoCodesError('Failed to load promo codes: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Promo codes fetch error:', error);
+            showPromoCodesError('Error loading promo codes: ' + error.message);
+        });
+    }
+    
+    /**
+     * Display promo codes in table
+     */
+    function displayPromoCodes(promoCodes) {
+        const tbody = document.getElementById('promoCodesTableBody');
+        if (!tbody) return;
+        
+        if (promoCodes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="loading">🎫 No promo codes found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = promoCodes.map(promoCode => {
+            const startDate = formatDate(promoCode.startDate);
+            const endDate = formatDate(promoCode.endDate);
+            const discountDisplay = getDiscountDisplay(promoCode);
+            const statusBadge = getPromoCodeStatusBadge(promoCode);
+            const usageDisplay = getUsageDisplay(promoCode);
+            
+            return `
+                <tr>
+                    <td><span class="promo-code">${promoCode.code}</span></td>
+                    <td class="description-cell" title="${promoCode.description || 'No description'}">${truncateText(promoCode.description, 30)}</td>
+                    <td>${discountDisplay}</td>
+                    <td>Rs. ${promoCode.minimumOrderAmount || '0'}</td>
+                    <td>${usageDisplay}</td>
+                    <td>${startDate}</td>
+                    <td>${endDate}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <button class="action-btn edit-btn" onclick="editPromoCode(${promoCode.id})">✏️ Edit</button>
+                        <button class="action-btn delete-btn" onclick="confirmDeletePromoCode(${promoCode.id})">🗑️ Delete</button>
+                        <button class="action-btn view-btn" onclick="validatePromoCodeTest('${promoCode.code}')">🔍 Test</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    /**
+     * Show promo codes error
+     */
+    function showPromoCodesError(message) {
+        const tbody = document.getElementById('promoCodesTableBody');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" class="loading" style="color: #dc3545;">❌ ${message}</td></tr>`;
+        }
+        showToast(message, 'error');
+    }
+    
+    /**
+     * Get discount display
+     */
+    function getDiscountDisplay(promoCode) {
+        if (promoCode.discountType === 'percentage') {
+            return `${promoCode.discountValue}%`;
+        } else {
+            return `Rs. ${promoCode.discountValue}`;
+        }
+    }
+    
+    /**
+     * Get promo code status badge
+     */
+    function getPromoCodeStatusBadge(promoCode) {
+        const now = new Date();
+        const startDate = new Date(promoCode.startDate);
+        const endDate = new Date(promoCode.endDate);
+        
+        let status = promoCode.status.toLowerCase();
+        let displayText = promoCode.status;
+        
+        if (promoCode.status === 'active') {
+            if (now < startDate) {
+                status = 'upcoming';
+                displayText = 'Upcoming';
+            } else if (now > endDate) {
+                status = 'expired';
+                displayText = 'Expired';
+            }
+        }
+        
+        return `<span class="badge status-${status}">${displayText}</span>`;
+    }
+    
+    /**
+     * Get usage display
+     */
+    function getUsageDisplay(promoCode) {
+        if (promoCode.usageLimit) {
+            return `${promoCode.usageCount || 0} / ${promoCode.usageLimit}`;
+        } else {
+            return `${promoCode.usageCount || 0} / ∞`;
+        }
+    }
+    
+    /**
+     * Format date
+     */
+    function formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+    
+    /**
+     * Truncate text
+     */
+    function truncateText(text, maxLength) {
+        if (!text) return 'No description';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    }
+    
+    /**
+     * Setup promo code events
+     */
+    function setupPromoCodeEvents() {
+        console.log('🎯 Setting up promo code events...');
+        
+        // Add promo code button
+        const addPromoCodeBtn = document.getElementById('addPromoCodeBtn');
+        if (addPromoCodeBtn) {
+            addPromoCodeBtn.onclick = openAddPromoCodeModal;
+        }
+        
+        // Promo code form
+        const promoCodeForm = document.getElementById('promoCodeForm');
+        if (promoCodeForm) {
+            promoCodeForm.onsubmit = handlePromoCodeFormSubmit;
+        }
+        
+        // Filter events
+        const statusFilter = document.getElementById('statusFilter');
+        if (statusFilter) statusFilter.onchange = loadPromoCodes;
+        
+        // Delete confirmation
+        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmDeleteBtn) {
+            confirmDeleteBtn.onclick = deletePromoCode;
+        }
+        
+        // Discount type change
+        const discountType = document.getElementById('discountType');
+        if (discountType) {
+            discountType.onchange = handleDiscountTypeChange;
+        }
+    }
+    
+    /**
+     * Make promo code functions global
+     */
+    function makePromoCodeFunctionsGlobal() {
+        window.editPromoCode = editPromoCode;
+        window.confirmDeletePromoCode = confirmDeletePromoCode;
+        window.deletePromoCode = deletePromoCode;
+        window.openAddPromoCodeModal = openAddPromoCodeModal;
+        window.closePromoCodeModal = closePromoCodeModal;
+        window.loadPromoCodes = loadPromoCodes;
+        window.validatePromoCodeTest = validatePromoCodeTest;
+        window.handleDiscountTypeChange = handleDiscountTypeChange;
+    }
+    
+    /**
+     * Open add promo code modal
+     */
+    function openAddPromoCodeModal() {
+        console.log('➕ Opening add promo code modal');
+        currentEditPromoCode = null;
+        
+        const modal = document.getElementById('promoCodeModal');
+        const form = document.getElementById('promoCodeForm');
+        const modalTitle = document.getElementById('promoCodeModalTitle');
+        const submitBtn = document.getElementById('promoCodeSubmitBtn');
+        const isEditField = document.getElementById('isPromoCodeEdit');
+        
+        if (modal && form) {
+            form.reset();
+            if (modalTitle) modalTitle.textContent = 'Add New Promo Code';
+            if (submitBtn) submitBtn.innerHTML = '<i class="icon-save"></i> Create Promo Code';
+            if (isEditField) isEditField.value = 'false';
+            
+            // Set default values
+            const today = new Date().toISOString().split('T')[0];
+            const nextMonth = new Date();
+            nextMonth.setMonth(nextMonth.getMonth() + 1);
+            const endDate = nextMonth.toISOString().split('T')[0];
+            
+            const startDateField = document.getElementById('startDate');
+            const endDateField = document.getElementById('endDate');
+            if (startDateField) startDateField.value = today;
+            if (endDateField) endDateField.value = endDate;
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            const codeField = document.getElementById('code');
+            if (codeField) setTimeout(() => codeField.focus(), 100);
+        }
+    }
+    
+    /**
+     * Close promo code modal
+     */
+    function closePromoCodeModal() {
+        const modal = document.getElementById('promoCodeModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            currentEditPromoCode = null;
+        }
+    }
+    
+    /**
+     * Edit promo code
+     */
+    function editPromoCode(promoCodeId) {
+        console.log('✏️ Editing promo code:', promoCodeId);
+        const promoCode = currentPromoCodes.find(pc => pc.id === promoCodeId);
+        if (!promoCode) {
+            showToast('Promo code not found', 'error');
+            return;
+        }
+        
+        currentEditPromoCode = promoCode;
+        
+        const modal = document.getElementById('promoCodeModal');
+        const form = document.getElementById('promoCodeForm');
+        const modalTitle = document.getElementById('promoCodeModalTitle');
+        const submitBtn = document.getElementById('promoCodeSubmitBtn');
+        const isEditField = document.getElementById('isPromoCodeEdit');
+        
+        if (modal && form) {
+            // Populate form
+            const fields = {
+                promoCodeId: promoCode.id,
+                code: promoCode.code,
+                description: promoCode.description || '',
+                discountType: promoCode.discountType,
+                discountValue: promoCode.discountValue,
+                minimumOrderAmount: promoCode.minimumOrderAmount || '',
+                usageLimit: promoCode.usageLimit || '',
+                startDate: formatDateForInput(promoCode.startDate),
+                endDate: formatDateForInput(promoCode.endDate),
+                status: promoCode.status,
+                isPromoCodeEdit: 'true'
+            };
+            
+            Object.keys(fields).forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) field.value = fields[fieldId];
+            });
+            
+            if (modalTitle) modalTitle.textContent = 'Edit Promo Code';
+            if (submitBtn) submitBtn.innerHTML = '<i class="icon-save"></i> Update Promo Code';
+            
+            // Update discount value label
+            handleDiscountTypeChange();
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    /**
+     * Format date for input field
+     */
+    function formatDateForInput(dateString) {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toISOString().split('T')[0];
+    }
+    
+    /**
+     * Confirm delete promo code
+     */
+    function confirmDeletePromoCode(promoCodeId) {
+        console.log('🗑️ Confirming delete promo code:', promoCodeId);
+        const promoCode = currentPromoCodes.find(pc => pc.id === promoCodeId);
+        if (!promoCode) {
+            showToast('Promo code not found', 'error');
+            return;
+        }
+        
+        currentDeletePromoCode = promoCode;
+        
+        const modal = document.getElementById('deleteModal');
+        const deleteType = document.getElementById('deleteType');
+        const deleteName = document.getElementById('deleteName');
+        
+        if (deleteType) deleteType.textContent = 'promo code';
+        if (deleteName) deleteName.textContent = promoCode.code;
+        
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    
+    /**
+     * Delete promo code
+     */
+    function deletePromoCode() {
+        console.log('🗑️ Deleting promo code:', currentDeletePromoCode);
+        if (!currentDeletePromoCode) {
+            showToast('No promo code selected for deletion', 'error');
+            return;
+        }
+        
+        fetch(`${baseUrl}/admin/promo-codes/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ promoCodeId: currentDeletePromoCode.id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                closeDeleteModal();
+                loadPromoCodes();
+                loadPromoCodeStats();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Delete error:', error);
+            showToast('Error deleting promo code: ' + error.message, 'error');
+        });
+    }
+    
+    /**
+     * Handle promo code form submit
+     */
+    function handlePromoCodeFormSubmit(e) {
+        e.preventDefault();
+        console.log('📝 Promo code form submitted');
+        
+        const formData = new FormData(e.target);
+        const promoCodeData = {};
+        
+        for (let [key, value] of formData.entries()) {
+            promoCodeData[key] = value.trim();
+        }
+        
+        const isEdit = promoCodeData.isPromoCodeEdit === 'true';
+        
+        // Basic validation
+        if (!promoCodeData.code || !promoCodeData.discountType || !promoCodeData.discountValue || 
+            !promoCodeData.startDate || !promoCodeData.endDate) {
+            showToast('Please fill in all required fields', 'error');
+            return;
+        }
+        
+        // Validate discount value
+        const discountValue = parseFloat(promoCodeData.discountValue);
+        if (isNaN(discountValue) || discountValue <= 0) {
+            showToast('Please enter a valid discount value', 'error');
+            return;
+        }
+        
+        // Validate percentage discount
+        if (promoCodeData.discountType === 'percentage' && discountValue > 100) {
+            showToast('Percentage discount cannot exceed 100%', 'error');
+            return;
+        }
+        
+        // Validate dates
+        const startDate = new Date(promoCodeData.startDate);
+        const endDate = new Date(promoCodeData.endDate);
+        if (endDate <= startDate) {
+            showToast('End date must be after start date', 'error');
+            return;
+        }
+        
+        // Validate usage limit
+        if (promoCodeData.usageLimit && parseInt(promoCodeData.usageLimit) <= 0) {
+            showToast('Usage limit must be greater than 0', 'error');
+            return;
+        }
+        
+        const url = isEdit ? `${baseUrl}/admin/promo-codes/update` : `${baseUrl}/admin/promo-codes/create`;
+        
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(promoCodeData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                closePromoCodeModal();
+                loadPromoCodes();
+                loadPromoCodeStats();
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Form submission error:', error);
+            showToast('Error saving promo code: ' + error.message, 'error');
+        });
+    }
+    
+    /**
+     * Handle discount type change
+     */
+    function handleDiscountTypeChange() {
+        const discountType = document.getElementById('discountType');
+        const discountValueLabel = document.getElementById('discountValueLabel');
+        const discountValueInput = document.getElementById('discountValue');
+        
+        if (discountType && discountValueLabel) {
+            if (discountType.value === 'percentage') {
+                discountValueLabel.textContent = 'Discount Percentage (%)';
+                if (discountValueInput) {
+                    discountValueInput.placeholder = 'e.g., 10 (for 10%)';
+                    discountValueInput.max = '100';
+                }
+            } else {
+                discountValueLabel.textContent = 'Discount Amount (Rs.)';
+                if (discountValueInput) {
+                    discountValueInput.placeholder = 'e.g., 500';
+                    discountValueInput.removeAttribute('max');
+                }
+            }
+        }
+    }
+    
+    /**
+     * Test validate promo code
+     */
+    function validatePromoCodeTest(code) {
+        console.log('🔍 Testing promo code:', code);
+        
+        const testAmount = prompt('Enter test order amount (Rs.):', '1000');
+        if (!testAmount) return;
+        
+        const amount = parseFloat(testAmount);
+        if (isNaN(amount) || amount <= 0) {
+            showToast('Please enter a valid amount', 'error');
+            return;
+        }
+        
+        fetch(`${baseUrl}/admin/promo-codes/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ 
+                code: code,
+                orderAmount: amount
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const message = `✅ Promo code "${code}" is valid!\n\n` +
+                               `Order Amount: Rs. ${amount}\n` +
+                               `Discount: Rs. ${data.discountAmount}\n` +
+                               `Final Amount: Rs. ${amount - data.discountAmount}\n\n` +
+                               `Description: ${data.description}`;
+                alert(message);
+            } else {
+                showToast(`❌ ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Validation error:', error);
+            showToast('Error testing promo code', 'error');
+        });
+    }
+    
+    // ==========================================
     // MODAL AND FORM FUNCTIONS
     // ==========================================
     
@@ -1222,6 +1825,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🗑️ Confirming delete item:', id);
         deleteItem = currentItems.find(item => item.id === id);
         deleteCategory = null;
+        currentDeletePromoCode = null;
         
         if (!deleteItem) {
             showToast('Item not found', 'error');
@@ -1437,6 +2041,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🗑️ Confirming delete category:', id);
         deleteCategory = currentCategories.find(cat => cat.id === id);
         deleteItem = null;
+        currentDeletePromoCode = null;
         
         if (!deleteCategory) {
             showToast('Category not found', 'error');
@@ -1522,6 +2127,8 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteCategoryConfirmed();
         } else if (currentDeleteUser) {
             deleteUser();
+        } else if (currentDeletePromoCode) {
+            deletePromoCode();
         } else {
             console.error('❌ No item selected for deletion');
             showToast('No item selected for deletion', 'error');
@@ -1595,6 +2202,7 @@ document.addEventListener('DOMContentLoaded', () => {
             deleteItem = null;
             deleteCategory = null;
             currentDeleteUser = null;
+            currentDeletePromoCode = null;
         }
     }
     
@@ -1874,7 +2482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function setupGlobalEvents() {
         // Modal outside click handling
         document.addEventListener('click', (e) => {
-            const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal'];
+            const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal', 'promoCodeModal'];
             modals.forEach(modalId => {
                 const modal = document.getElementById(modalId);
                 if (modal && e.target === modal) {
@@ -1888,7 +2496,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 // Close all modals on escape
-                const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal'];
+                const modals = ['userModal', 'deleteModal', 'itemModal', 'categoryModal', 'categoriesListModal', 'orderDetailsModal', 'promoCodeModal'];
                 modals.forEach(modalId => {
                     const modal = document.getElementById(modalId);
                     if (modal && modal.style.display === 'block') {
@@ -2183,10 +2791,202 @@ document.addEventListener('DOMContentLoaded', () => {
             margin-right: 10px;
             width: 20px;
         }
+        
+        /* Promo Code Specific Styles */
+        .promo-code {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .description-cell {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .status-active {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .status-inactive {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .status-expired {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .status-upcoming {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .action-btn.view-btn {
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            margin: 2px;
+        }
+        
+        .action-btn.view-btn:hover {
+            background-color: #138496;
+        }
+        
+        .form-group label[for="discountValue"] {
+            transition: all 0.3s ease;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .modal-content {
+            background: white;
+            margin: 2% auto;
+            padding: 0;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+        
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
     `;
     document.head.appendChild(style);
     
-    console.log('🎉 Pahana Edu Admin Dashboard setup complete!');
-});/**
- * 
- */
+    console.log('🎉 Pahana Edu Admin Dashboard with Promo Code Management setup complete!');
+});
