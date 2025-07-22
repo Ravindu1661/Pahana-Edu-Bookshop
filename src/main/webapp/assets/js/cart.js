@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let shipping = 250;
     let discount = 0;
     let total = 0;
+    let promoApplied = false;
+    let currentPromoCode = '';
     
     // Initialize
     initCartPage();
@@ -48,40 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
             hideLoading();
             console.error('❌ Cart items fetch error:', error);
-            // Show sample cart for demo
-            loadSampleCartItems();
+            showEmptyCart();
         });
-    }
-    
-    // Load sample cart items (fallback)
-    function loadSampleCartItems() {
-        cartItems = [
-            {
-                id: 1,
-                productId: 1,
-                title: "The Great Gatsby",
-                author: "F. Scott Fitzgerald",
-                price: 1200,
-                originalPrice: 1500,
-                quantity: 2,
-                imagePath: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                stock: 10
-            },
-            {
-                id: 2,
-                productId: 2,
-                title: "To Kill a Mockingbird",
-                author: "Harper Lee",
-                price: 1800,
-                originalPrice: null,
-                quantity: 1,
-                imagePath: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-                stock: 5
-            }
-        ];
-        
-        displayCartItems();
-        calculateTotals();
     }
     
     // Display cart items
@@ -189,6 +159,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Free shipping for orders over Rs. 3000
         shipping = subtotal >= 3000 ? 0 : 250;
         
+        // Apply discount if promo is active
+        if (promoApplied && discount > 0) {
+            // Discount is already calculated, just use it
+        } else {
+            discount = 0;
+        }
+        
         total = subtotal + shipping - discount;
         
         updateTotalsDisplay();
@@ -286,6 +263,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Remove from local data
                 cartItems = cartItems.filter(item => item.id !== cartItemId);
                 
+                // Reset promo if cart becomes empty
+                if (cartItems.length === 0) {
+                    promoApplied = false;
+                    currentPromoCode = '';
+                    discount = 0;
+                }
+                
                 displayCartItems();
                 calculateTotals();
                 loadCartCount();
@@ -325,6 +309,9 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoading();
             if (data.success) {
                 cartItems = [];
+                promoApplied = false;
+                currentPromoCode = '';
+                discount = 0;
                 displayCartItems();
                 calculateTotals();
                 loadCartCount();
@@ -343,15 +330,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Apply promo code
     function applyPromoCode() {
         const promoInput = document.getElementById('promoInput');
-        const promoCode = promoInput?.value.trim();
+        const promoCode = promoInput?.value.trim().toUpperCase();
         
         if (!promoCode) {
             showToast('❌ Please enter a promo code', 'error');
             return;
         }
         
+        if (promoApplied && currentPromoCode === promoCode) {
+            showToast('❌ This promo code is already applied', 'error');
+            return;
+        }
+        
         showLoading();
         
+        // Call the server-side promo validation
         fetch(`${baseUrl}/customer/cart/apply-promo`, {
             method: 'POST',
             headers: {
@@ -365,27 +358,82 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             hideLoading();
             if (data.success) {
-                discount = data.discount || 0;
+                // Use the discountAmount from server response
+                discount = parseFloat(data.discountAmount) || 0;
+                promoApplied = true;
+                currentPromoCode = data.promoCode;
+                
+                // Store additional promo info
+                const promoInfo = {
+                    code: data.promoCode,
+                    type: data.discountType,
+                    value: data.discountValue,
+                    description: data.description
+                };
+                
                 calculateTotals();
-                showToast(`✅ Promo code applied! You saved Rs. ${discount}`, 'success');
+                
+                // Show appropriate success message based on discount type
+                let successMessage = `✅ Promo code applied! `;
+                if (data.discountType === 'percentage') {
+                    successMessage += `${data.discountValue}% discount - You saved Rs. ${discount.toFixed(2)}`;
+                } else {
+                    successMessage += `You saved Rs. ${discount.toFixed(2)}`;
+                }
+                
+                if (data.description) {
+                    successMessage += ` (${data.description})`;
+                }
+                
+                showToast(successMessage, 'success');
                 if (promoInput) promoInput.value = '';
+                
+                // Update promo display if exists
+                updatePromoDisplay(promoInfo);
+                
             } else {
-                showToast('❌ ' + data.message, 'error');
+                showToast('❌ ' + (data.message || 'Invalid promo code'), 'error');
             }
         })
         .catch(error => {
             hideLoading();
             console.error('❌ Apply promo error:', error);
-            // Demo promo codes
-            if (promoCode.toUpperCase() === 'SAVE10') {
-                discount = subtotal * 0.1; // 10% discount
-                calculateTotals();
-                showToast(`✅ Promo code applied! You saved Rs. ${discount.toFixed(2)}`, 'success');
-                if (promoInput) promoInput.value = '';
-            } else {
-                showToast('❌ Invalid promo code', 'error');
-            }
+            showToast('❌ Error applying promo code. Please try again.', 'error');
         });
+    }
+    
+    // Update promo display (optional visual feedback)
+    function updatePromoDisplay(promoInfo) {
+        // If you have a promo display element, update it here
+        const promoDisplay = document.getElementById('appliedPromoDisplay');
+        if (promoDisplay) {
+            promoDisplay.innerHTML = `
+                <div class="applied-promo">
+                    <i class="fas fa-tag"></i>
+                    <span>${promoInfo.code} applied</span>
+                    <button onclick="removePromoCode()" class="remove-promo">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            promoDisplay.style.display = 'block';
+        }
+    }
+    
+    // Remove promo code
+    function removePromoCode() {
+        promoApplied = false;
+        currentPromoCode = '';
+        discount = 0;
+        calculateTotals();
+        
+        const promoInput = document.getElementById('promoInput');
+        if (promoInput) promoInput.value = '';
+        
+        const promoDisplay = document.getElementById('appliedPromoDisplay');
+        if (promoDisplay) promoDisplay.style.display = 'none';
+        
+        showToast('✅ Promo code removed', 'info');
     }
     
     // Proceed to checkout
@@ -394,6 +442,16 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('❌ Your cart is empty', 'error');
             return;
         }
+        
+        // Store checkout data in session
+        const checkoutData = {
+            items: cartItems,
+            subtotal: subtotal,
+            shipping: shipping,
+            discount: discount,
+            total: total,
+            promoCode: currentPromoCode
+        };
         
         // For demo purposes, show success message
         showToast('🚀 Redirecting to checkout...', 'info');
@@ -445,6 +503,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
+        
+        // Promo code enter key
+        const promoInput = document.getElementById('promoInput');
+        if (promoInput) {
+            promoInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    applyPromoCode();
+                }
+            });
+        }
     }
     
     function performSearch() {
@@ -493,10 +561,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.removeFromCart = removeFromCart;
     window.clearCart = clearCart;
     window.applyPromoCode = applyPromoCode;
+    window.removePromoCode = removePromoCode;
     window.proceedToCheckout = proceedToCheckout;
     window.hideToast = hideToast;
     
     console.log('✅ Cart page initialized successfully');
-});/**
- * 
- */
+});

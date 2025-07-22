@@ -460,14 +460,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // Go to checkout
+    // Go to checkout - UPDATED TO GO TO CART.JSP
     function goToCheckout() {
         if (cartItems.length === 0) {
             showToast('❌ Your cart is empty', 'error');
             return;
         }
         
-        window.location.href = 'checkout.jsp';
+        // Redirect to cart.jsp instead of checkout.jsp
+        window.location.href = 'cart.jsp';
     }
     
     // View category products

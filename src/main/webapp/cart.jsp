@@ -19,6 +19,44 @@ if (session.getAttribute("user") == null ||
     <link rel="stylesheet" href="assets/css/customer-style.css">
     <link rel="stylesheet" href="assets/css/cart.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .applied-promo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            color: #2e7d32;
+            font-size: 14px;
+        }
+        
+        .applied-promo i {
+            color: #4caf50;
+        }
+        
+        .remove-promo {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        
+        .remove-promo:hover {
+            background: rgba(0,0,0,0.1);
+            color: #333;
+        }
+        
+        #appliedPromoDisplay {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -120,6 +158,9 @@ if (session.getAttribute("user") == null ||
                             <span id="total">Rs. 0.00</span>
                         </strong>
                     </div>
+                    
+                    <!-- Applied Promo Display -->
+                    <div id="appliedPromoDisplay"></div>
                     
                     <div class="promo-code">
                         <input type="text" id="promoInput" placeholder="Enter promo code">

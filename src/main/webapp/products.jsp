@@ -38,11 +38,11 @@ request.setAttribute("categories", categories);
                 <h2>📚 Pahana Edu</h2>
             </div>
             <div class="nav-menu">
-			    <a href="customer-dashboard.jsp">Home</a>
-			    <a href="products.jsp" class="active">Products</a>
-			    <a href="customer-dashboard.jsp#about">About</a>
-			    <a href="customer-dashboard.jsp#contact">Contact</a>
-			</div>
+                <a href="customer-dashboard.jsp">Home</a>
+                <a href="products.jsp" class="active">Products</a>
+                <a href="customer-dashboard.jsp#about">About</a>
+                <a href="customer-dashboard.jsp#contact">Contact</a>
+            </div>
             
             <div class="nav-actions">
                 <div class="search-box">
@@ -123,12 +123,14 @@ request.setAttribute("categories", categories);
                     </c:when>
                     <c:otherwise>
                         <c:forEach var="product" items="${products}">
-                            <div class="product-card" 
+                            <div class="product-card ${product.stock == 0 ? 'out-of-stock-product' : ''}" 
                                  data-id="${product.id}"
                                  data-title="${product.title.toLowerCase()}"
                                  data-author="${product.author.toLowerCase()}"
                                  data-category="${product.categoryId}"
-                                 data-price="${product.offerPrice != null ? product.offerPrice : product.price}">
+                                 data-category-name="${product.categoryName}"
+                                 data-price="${product.offerPrice != null ? product.offerPrice : product.price}"
+                                 data-stock="${product.stock}">
                                 
                                 <div class="product-image">
                                     <img src="${product.imagePath.startsWith('data:image/') ? product.imagePath : 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'}" 
@@ -145,13 +147,22 @@ request.setAttribute("categories", categories);
                                 </div>
                                 
                                 <div class="product-info">
+                                    <div class="product-category">${product.categoryName != null ? product.categoryName : 'General'}</div>
                                     <h3 class="product-title">${product.title}</h3>
                                     <p class="product-author">by ${product.author}</p>
+                                    <c:if test="${not empty product.description}">
+                                        <p class="product-description">${product.description.length() > 80 ? product.description.substring(0, 80).concat('...') : product.description}</p>
+                                    </c:if>
+                                    
+                                    <div class="product-stock ${product.stock > 0 ? 'in-stock' : 'out-of-stock'}">
+                                        <i class="fas fa-box"></i>
+                                        <span>${product.stock > 0 ? 'In Stock' : 'Out of Stock'} (${product.stock} available)</span>
+                                    </div>
                                     
                                     <div class="product-price">
                                         <c:choose>
                                             <c:when test="${product.offerPrice != null}">
-                                                <span class="offer-price">Rs. ${product.offerPrice}</span>
+                                                <span class="current-price">Rs. ${product.offerPrice}</span>
                                                 <span class="original-price">Rs. ${product.price}</span>
                                             </c:when>
                                             <c:otherwise>
@@ -160,26 +171,13 @@ request.setAttribute("categories", categories);
                                         </c:choose>
                                     </div>
                                     
-                                    <div class="product-stock">
-                                        <c:choose>
-                                            <c:when test="${product.stock > 10}">
-                                                <span class="stock-good">In Stock</span>
-                                            </c:when>
-                                            <c:when test="${product.stock > 0}">
-                                                <span class="stock-low">Only ${product.stock} left</span>
-                                            </c:when>
-                                            <c:otherwise>
-                                                <span class="stock-out">Out of Stock</span>
-                                            </c:otherwise>
-                                        </c:choose>
+                                    <div class="product-actions">
+                                        <button class="add-to-cart" 
+                                                onclick="addToCart(${product.id})"
+                                                ${product.stock == 0 ? 'disabled' : ''}>
+                                            ${product.stock == 0 ? 'Out of Stock' : 'Add to Cart'}
+                                        </button>
                                     </div>
-                                    
-                                    <button class="add-to-cart-btn" 
-                                            onclick="addToCart(${product.id})"
-                                            ${product.stock == 0 ? 'disabled' : ''}>
-                                        <i class="fas fa-cart-plus"></i>
-                                        ${product.stock == 0 ? 'Out of Stock' : 'Add to Cart'}
-                                    </button>
                                 </div>
                             </div>
                         </c:forEach>
@@ -241,10 +239,17 @@ request.setAttribute("categories", categories);
         </div>
     </footer>
 
+    <!-- Loading Spinner -->
+    <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner"></div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast">
-        <span id="toastMessage"></span>
-        <button onclick="hideToast()">×</button>
+        <div class="toast-content">
+            <span id="toastMessage"></span>
+            <button class="toast-close" onclick="hideToast()">×</button>
+        </div>
     </div>
 
     <script src="assets/js/products.js"></script>

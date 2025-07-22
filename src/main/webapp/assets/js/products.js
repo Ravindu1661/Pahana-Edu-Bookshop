@@ -1,189 +1,90 @@
-// Simple Products JavaScript
-document.addEventListener('DOMContentLoaded', function() {
+// Products JavaScript - Customer Dashboard Style
+document.addEventListener('DOMContentLoaded', () => {
     console.log('📚 Products page loaded');
     
     // Get base URL
     const contextPath = window.location.pathname.split('/')[1];
     const baseUrl = '/' + contextPath;
     
+    // Default image URL
+    const defaultImage = 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80';
+    
     // Get all product cards
     let allProducts = Array.from(document.querySelectorAll('.product-card'));
     
-    // Category mapping - store categories from server
-    let categoryMap = {};
-    
     // Initialize
     loadCartCount();
-    addStockAndCategoryDisplay();
     
-    // Load categories and create mapping
-    function loadCategoryMapping() {
-        // Get categories from the filter dropdown options
-        const categoryFilter = document.getElementById('categoryFilter');
-        if (categoryFilter) {
-            const options = categoryFilter.querySelectorAll('option');
-            options.forEach(option => {
-                if (option.value && option.textContent) {
-                    categoryMap[option.value] = option.textContent.trim();
-                }
-            });
+    // Check and update out of stock products
+    allProducts.forEach(product => {
+        const stock = parseInt(product.dataset.stock) || 0;
+        if (stock === 0) {
+            updateOutOfStockDisplay(product, true);
         }
-        console.log('📋 Category mapping loaded:', categoryMap);
-    }
+    });
     
-    // Add stock and category display to existing products
-    function addStockAndCategoryDisplay() {
-        // Load category mapping first
-        loadCategoryMapping();
+    // Enhanced out-of-stock display method (from customer dashboard)
+    function updateOutOfStockDisplay(productElement, isOutOfStock) {
+        const stockDiv = productElement.querySelector('.product-stock');
+        const addToCartBtn = productElement.querySelector('.add-to-cart');
         
-        allProducts.forEach(product => {
-            const productInfo = product.querySelector('.product-info');
-            if (productInfo) {
-                // Get category name using Customer Dashboard method
-                let categoryName = getCategoryName(product);
-                
-                // Try to get stock from different possible sources
-                let stock = getProductStock(product);
-                
-                // Store stock and category name in dataset for later use
-                product.dataset.stock = stock;
-                product.dataset.categoryName = categoryName;
-                
-                // Add category display
-                addCategoryDisplay(productInfo, categoryName);
-                
-                // Add stock display
-                addStockDisplay(productInfo, stock, product);
-                
-                // Update add to cart button based on stock
-                updateAddToCartButton(product, stock);
-            }
-        });
-        
-        console.log(`✅ Stock and category display added to ${allProducts.length} products`);
-        console.log(`📊 Categories mapped: ${Object.keys(categoryMap).length} categories`);
-    }
-    
-    // Get category name (similar to Customer Dashboard method)
-    function getCategoryName(product) {
-        // Try to get from API response first (if categoryName is available)
-        if (product.dataset.categoryName) {
-            return product.dataset.categoryName;
-        }
-        
-        // Try to get from category mapping
-        const categoryId = product.dataset.category;
-        if (categoryId && categoryMap[categoryId]) {
-            return categoryMap[categoryId];
-        }
-        
-        // Try to extract from existing content
-        const existingCategory = product.querySelector('.product-category');
-        if (existingCategory) {
-            return existingCategory.textContent.trim();
-        }
-        
-        // Default fallback
-        return 'General';
-    }
-    
-    // Get product stock
-    function getProductStock(product) {
-        if (product.dataset.stock) {
-            return parseInt(product.dataset.stock);
-        } else if (product.getAttribute('data-stock')) {
-            return parseInt(product.getAttribute('data-stock'));
-        } else {
-            // Try to extract from existing stock display
-            const existingStock = product.querySelector('.product-stock span');
-            if (existingStock) {
-                const stockMatch = existingStock.textContent.match(/(\d+)\s*available/i);
-                if (stockMatch) {
-                    return parseInt(stockMatch[1]);
-                }
-            }
-            // Check for JSP stock display
-            const stockText = product.textContent;
-            if (stockText.includes('Out of Stock')) {
-                return 0;
-            } else if (stockText.includes('Only') && stockText.includes('left')) {
-                const match = stockText.match(/Only\s+(\d+)\s+left/i);
-                if (match) {
-                    return parseInt(match[1]);
-                }
-            }
-            // Default to available if no specific stock info
-            return 10;
-        }
-    }
-    
-    // Add category display
-    function addCategoryDisplay(productInfo, categoryName) {
-        let categoryDiv = productInfo.querySelector('.product-category');
-        if (!categoryDiv) {
-            categoryDiv = document.createElement('div');
-            categoryDiv.className = 'product-category';
-            categoryDiv.style.cssText = 'background: rgba(37, 99, 235, 0.1); color: #2563eb; padding: 4px 8px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; display: inline-block; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em;';
-            productInfo.insertBefore(categoryDiv, productInfo.firstChild);
-        }
-        categoryDiv.textContent = categoryName;
-    }
-    
-    // Add stock display
-    function addStockDisplay(productInfo, stock, product) {
-        let stockDiv = productInfo.querySelector('.product-stock');
-        if (!stockDiv) {
-            stockDiv = document.createElement('div');
-            stockDiv.className = `product-stock ${stock > 0 ? 'in-stock' : 'out-of-stock'}`;
-            
-            // Add styling based on modern CSS variables
-            if (stock > 0) {
-                stockDiv.style.cssText = 'color: #059669; font-size: 13px; margin: 8px 0; display: flex; align-items: center; gap: 4px; font-weight: 500;';
-            } else {
-                stockDiv.style.cssText = 'color: #dc2626; font-size: 13px; margin: 8px 0; display: flex; align-items: center; gap: 4px; font-weight: 500;';
+        if (isOutOfStock) {
+            // Update stock display
+            if (stockDiv) {
+                stockDiv.className = 'product-stock out-of-stock';
+                stockDiv.innerHTML = '<i class="fas fa-box"></i><span>Out of Stock (0 available)</span>';
             }
             
-            // Insert before product actions or at the end
-            const productActions = productInfo.querySelector('.product-actions') || 
-                                 productInfo.querySelector('button') ||
-                                 productInfo.querySelector('.add-to-cart-btn');
-            if (productActions) {
-                productInfo.insertBefore(stockDiv, productActions);
-            } else {
-                productInfo.appendChild(stockDiv);
-            }
-        }
-        
-        // Update stock display content
-        stockDiv.innerHTML = `
-            <i class="fas fa-box"></i>
-            <span>${stock > 0 ? 'In Stock' : 'Out of Stock'} (${stock} available)</span>
-        `;
-        stockDiv.className = `product-stock ${stock > 0 ? 'in-stock' : 'out-of-stock'}`;
-    }
-    
-    // Update add to cart button
-    function updateAddToCartButton(product, stock) {
-        const addToCartBtn = product.querySelector('.add-to-cart') || 
-                           product.querySelector('.add-to-cart-btn') ||
-                           product.querySelector('button[onclick*="addToCart"]');
-        
-        if (addToCartBtn) {
-            if (stock === 0) {
+            // Update button
+            if (addToCartBtn) {
                 addToCartBtn.disabled = true;
                 addToCartBtn.textContent = 'Out of Stock';
-                addToCartBtn.style.backgroundColor = '#6b7280';
+                addToCartBtn.style.backgroundColor = '#ccc';
                 addToCartBtn.style.cursor = 'not-allowed';
                 addToCartBtn.style.opacity = '0.6';
-            } else {
+            }
+            
+            // Add visual indicator to product card
+            productElement.classList.add('out-of-stock-product');
+            productElement.style.opacity = '0.8';
+            
+        } else {
+            // Update stock display
+            if (stockDiv) {
+                stockDiv.className = 'product-stock in-stock';
+                const stock = productElement.dataset.stock || '1';
+                stockDiv.innerHTML = `<i class="fas fa-box"></i><span>In Stock (${stock} available)</span>`;
+            }
+            
+            // Update button
+            if (addToCartBtn) {
                 addToCartBtn.disabled = false;
-                addToCartBtn.innerHTML = '<i class="fas fa-cart-plus"></i> Add to Cart';
-                addToCartBtn.style.backgroundColor = '#059669';
+                addToCartBtn.textContent = 'Add to Cart';
+                addToCartBtn.style.backgroundColor = '';
                 addToCartBtn.style.cursor = 'pointer';
                 addToCartBtn.style.opacity = '1';
             }
+            
+            // Remove visual indicator
+            productElement.classList.remove('out-of-stock-product');
+            productElement.style.opacity = '1';
         }
     }
+    
+    // Truncate text helper function
+    function truncateText(text, maxLength) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+    
+    // Update all product descriptions to truncate
+    allProducts.forEach(product => {
+        const descriptionEl = product.querySelector('.product-description');
+        if (descriptionEl) {
+            const fullText = descriptionEl.textContent;
+            descriptionEl.textContent = truncateText(fullText, 80);
+        }
+    });
     
     // Search products
     window.searchProducts = function() {
@@ -271,30 +172,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Add to cart
+    // Add to cart function (Customer Dashboard style)
     window.addToCart = function(productId) {
         console.log('🛒 Adding product to cart:', productId);
         
-        // Find the product card and check stock
-        const productCard = document.querySelector(`[data-id="${productId}"]`) || 
-                           document.querySelector(`[onclick*="addToCart(${productId})"]`).closest('.product-card');
-        
-        if (productCard) {
-            const stock = parseInt(productCard.dataset.stock) || 0;
-            console.log(`📦 Product ${productId} stock: ${stock}`);
-            
+        // Check if product is in stock before adding
+        const productElement = document.querySelector(`[data-id="${productId}"]`);
+        if (productElement) {
+            const stock = parseInt(productElement.dataset.stock) || 0;
             if (stock === 0) {
                 showToast('❌ Product is out of stock', 'error');
                 return;
             }
-        } else {
-            console.log('⚠️ Product card not found, proceeding with add to cart');
         }
         
-        // Show success message immediately
-        showToast('✅ Product added to cart!', 'success');
+        showLoading();
         
-        // Try API call
         fetch(`${baseUrl}/customer/cart/add`, {
             method: 'POST',
             headers: {
@@ -307,19 +200,18 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            hideLoading();
             if (data.success) {
-                loadCartCount();
-                showToast('✅ ' + data.message, 'success');
+                showToast('✅ Product added to cart!', 'success');
+                updateCartCount();
             } else {
                 showToast('❌ ' + data.message, 'error');
             }
         })
         .catch(error => {
-            console.log('Cart API not available, using fallback');
-            // Fallback - increment cart count manually
-            const cartCount = document.getElementById('cartCount');
-            const currentCount = parseInt(cartCount.textContent) || 0;
-            updateCartCountDisplay(currentCount + 1);
+            hideLoading();
+            console.error('❌ Add to cart error:', error);
+            showToast('❌ Error adding to cart', 'error');
         });
     };
     
@@ -333,9 +225,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
-            console.log('Cart count API not available');
-            updateCartCountDisplay(0);
+            console.error('❌ Cart count error:', error);
         });
+    }
+    
+    // Update cart count
+    function updateCartCount() {
+        loadCartCount();
     }
     
     // Update cart count display
@@ -347,8 +243,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Cart functions
+    // Open cart sidebar
     window.openCart = function() {
+        console.log('🛒 Opening cart sidebar');
+        loadCartItems();
+        
         const sidebar = document.getElementById('cartSidebar');
         const overlay = document.getElementById('cartOverlay');
         
@@ -356,10 +255,10 @@ document.addEventListener('DOMContentLoaded', function() {
             sidebar.classList.add('open');
             overlay.classList.add('open');
             document.body.style.overflow = 'hidden';
-            loadCartItems();
         }
     };
     
+    // Close cart sidebar
     window.closeCart = function() {
         const sidebar = document.getElementById('cartSidebar');
         const overlay = document.getElementById('cartOverlay');
@@ -373,68 +272,165 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load cart items
     function loadCartItems() {
-        const cartItems = document.getElementById('cartItems');
-        
         fetch(`${baseUrl}/customer/cart/items`)
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.items.length > 0) {
-                displayCartItems(data.items);
+            if (data.success) {
+                const cartItems = data.items || [];
+                displayCartItems(cartItems);
+                updateCartTotal(cartItems);
             } else {
-                cartItems.innerHTML = `
-                    <div class="empty-cart">
-                        <i class="fas fa-shopping-cart"></i>
-                        <p>Your cart is empty</p>
-                    </div>
-                `;
+                console.error('❌ Cart items error:', data.message);
             }
         })
         .catch(error => {
-            console.log('Cart items API not available');
-            cartItems.innerHTML = `
-                <div class="empty-cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <p>Your cart is empty</p>
-                </div>
-            `;
+            console.error('❌ Cart items fetch error:', error);
+            displayCartItems([]);
+            updateCartTotal([]);
         });
     }
     
     // Display cart items
-    function displayCartItems(items) {
-        const cartItems = document.getElementById('cartItems');
-        const cartTotal = document.getElementById('cartTotal');
+    function displayCartItems(cartItems) {
+        const cartItemsContainer = document.getElementById('cartItems');
+        if (!cartItemsContainer) return;
         
-        let total = 0;
-        
-        const itemsHTML = items.map(item => {
-            const itemTotal = item.price * item.quantity;
-            total += itemTotal;
-            
-            return `
-                <div class="cart-item" style="display: flex; gap: 15px; padding: 15px 0; border-bottom: 1px solid #eee;">
-                    <img src="${item.imagePath.startsWith('data:image/') ? item.imagePath : 'https://images.unsplash.com/photo-1543002588-bfa74002ed7e?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80'}" 
-                         alt="${item.title}" 
-                         style="width: 60px; height: 60px; object-fit: cover; border-radius: 5px;">
-                    <div style="flex: 1;">
-                        <h4 style="margin: 0; font-size: 14px;">${item.title}</h4>
-                        <p style="margin: 5px 0; font-size: 12px; color: #666;">by ${item.author}</p>
-                        <p style="margin: 5px 0; font-weight: bold; color: #27ae60;">Rs. ${item.price} × ${item.quantity}</p>
-                    </div>
+        if (cartItems.length === 0) {
+            cartItemsContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <i class="fas fa-shopping-cart" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                    <p>Your cart is empty</p>
                 </div>
             `;
-        }).join('');
+            return;
+        }
         
-        cartItems.innerHTML = itemsHTML;
-        cartTotal.textContent = total.toFixed(2);
+        cartItemsContainer.innerHTML = cartItems.map(item => `
+            <div class="cart-item">
+                <img src="${getProductImage(item.imagePath)}" alt="${item.title}" class="cart-item-image">
+                <div class="cart-item-info">
+                    <div class="cart-item-title">${item.title}</div>
+                    <div class="cart-item-price">Rs. ${item.price}</div>
+                    <div class="cart-item-controls">
+                        <button class="quantity-btn" onclick="updateCartItemQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                        <span>${item.quantity}</span>
+                        <button class="quantity-btn" onclick="updateCartItemQuantity(${item.id}, ${item.quantity + 1})">+</button>
+                        <button class="quantity-btn" onclick="removeFromCart(${item.id})" style="margin-left: 10px; color: #e74c3c;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
     }
+    
+    // Get product image URL
+    function getProductImage(imagePath) {
+        if (!imagePath || imagePath.trim() === '') {
+            return defaultImage;
+        }
+        
+        if (imagePath.startsWith('data:image/')) {
+            return imagePath;
+        }
+        
+        if (imagePath.startsWith('http')) {
+            return imagePath;
+        }
+        
+        return baseUrl + '/' + imagePath;
+    }
+    
+    // Update cart total
+    function updateCartTotal(cartItems) {
+        const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const cartTotalEl = document.getElementById('cartTotal');
+        if (cartTotalEl) {
+            cartTotalEl.textContent = total.toFixed(2);
+        }
+    }
+    
+    // Update cart item quantity
+    window.updateCartItemQuantity = function(itemId, newQuantity) {
+        if (newQuantity < 1) {
+            removeFromCart(itemId);
+            return;
+        }
+        
+        fetch(`${baseUrl}/customer/cart/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                cartItemId: itemId,
+                quantity: newQuantity
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadCartItems();
+                updateCartCount();
+            } else {
+                showToast('❌ ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Update cart error:', error);
+            showToast('❌ Error updating cart', 'error');
+        });
+    };
+    
+    // Remove from cart
+    window.removeFromCart = function(itemId) {
+        fetch(`${baseUrl}/customer/cart/remove`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                cartItemId: itemId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('✅ Item removed from cart', 'success');
+                loadCartItems();
+                updateCartCount();
+            } else {
+                showToast('❌ ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('❌ Remove from cart error:', error);
+            showToast('❌ Error removing item', 'error');
+        });
+    };
     
     // Go to checkout
     window.goToCheckout = function() {
+        const cartItemsContainer = document.getElementById('cartItems');
+        if (cartItemsContainer && cartItemsContainer.querySelector('.empty-cart')) {
+            showToast('❌ Your cart is empty', 'error');
+            return;
+        }
+        
         window.location.href = 'cart.jsp';
     };
     
-    // Toast notification
+    // Utility functions
+    function showLoading() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) spinner.style.display = 'flex';
+    }
+    
+    function hideLoading() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) spinner.style.display = 'none';
+    }
+    
     function showToast(message, type = 'info') {
         const toast = document.getElementById('toast');
         const toastMessage = document.getElementById('toastMessage');
@@ -447,6 +443,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 toast.classList.remove('show');
             }, 3000);
         }
+        
+        console.log(`📢 ${type.toUpperCase()}: ${message}`);
     }
     
     window.hideToast = function() {
@@ -455,11 +453,14 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeCart();
         }
     });
     
-    console.log('✅ Products page initialized');
+    // Global functions
+    window.updateOutOfStockDisplay = updateOutOfStockDisplay;
+    
+    console.log('✅ Products page initialized with stock display');
 });
