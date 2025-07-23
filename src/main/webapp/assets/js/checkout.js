@@ -1,4 +1,4 @@
-// Checkout Page JavaScript - Clean Production Version
+// Checkout Page JavaScript - Enhanced with Promo Code Support
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🛒 Checkout page loaded');
     
@@ -17,18 +17,50 @@ document.addEventListener('DOMContentLoaded', () => {
     let shipping = 250;
     let discount = 0;
     let total = 0;
+    let appliedPromoCode = '';
+    let promoDiscountAmount = 0;
     
     // Initialize
     initCheckoutPage();
     
     function initCheckoutPage() {
         console.log('🔧 Initializing checkout page...');
+        checkPromoCodeFromSession();
         loadCartItems();
         loadCartCount();
         setupEventListeners();
         setupPaymentMethodToggle();
         setupCardInputFormatting();
         populateUserInfo();
+    }
+    
+    // Check if promo code was applied in cart
+    function checkPromoCodeFromSession() {
+        // Get promo code data from session storage
+        const savedPromoCode = sessionStorage.getItem('appliedPromoCode');
+        const savedDiscount = sessionStorage.getItem('promoDiscountAmount');
+        
+        if (savedPromoCode && savedDiscount) {
+            appliedPromoCode = savedPromoCode;
+            promoDiscountAmount = parseFloat(savedDiscount);
+            discount = promoDiscountAmount; // Set the discount immediately
+            console.log('📢 Promo code found from cart:', appliedPromoCode, 'Discount:', promoDiscountAmount);
+        }
+        
+        // Also check for complete checkout data
+        const checkoutDataStr = sessionStorage.getItem('checkoutData');
+        if (checkoutDataStr) {
+            try {
+                const checkoutData = JSON.parse(checkoutDataStr);
+                if (checkoutData.promoCode && checkoutData.discount > 0) {
+                    appliedPromoCode = checkoutData.promoCode;
+                    discount = checkoutData.discount;
+                    console.log('📢 Checkout data found with promo:', appliedPromoCode, 'Discount:', discount);
+                }
+            } catch (error) {
+                console.error('Error parsing checkout data:', error);
+            }
+        }
     }
     
     // Setup payment method toggle - Show/Hide card form
@@ -197,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     }
     
-    // Load cart items
+    // Load cart items with promo code support
     function loadCartItems() {
         console.log('📦 Loading cart items...');
         showLoading();
@@ -210,7 +242,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 cartItems = data.items;
                 displayOrderItems();
                 displaySummaryItems();
-                calculateTotals();
+                
+                // Check for applied promo code from backend
+                checkForAppliedPromoCode();
+                
                 console.log(`✅ ${cartItems.length} cart items loaded`);
             } else {
                 console.log('❌ No cart items found');
@@ -220,27 +255,51 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
             hideLoading();
             console.error('❌ Cart items fetch error:', error);
-            loadSampleCartItems();
+            showEmptyCart();
         });
     }
     
-    // Load sample cart items (fallback)
-    function loadSampleCartItems() {
-        cartItems = [
-            {
-                id: 1,
-                productId: 1,
-                title: "The Great Gatsby",
-                author: "F. Scott Fitzgerald",
-                price: 1200,
-                quantity: 1,
-                imagePath: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80"
-            }
-        ];
+    // Check for applied promo code
+    function checkForAppliedPromoCode() {
+        // First check if we already have discount from session
+        if (discount > 0 && appliedPromoCode) {
+            console.log('✅ Using promo from session:', appliedPromoCode, 'Discount:', discount);
+            displayPromoCodeInfo();
+            calculateTotals();
+            return;
+        }
         
-        displayOrderItems();
-        displaySummaryItems();
-        calculateTotals();
+        // Try to get from backend API
+        fetch(`${baseUrl}/customer/cart/promo-status`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.promoCode) {
+                appliedPromoCode = data.promoCode;
+                discount = data.discountAmount || 0;
+                console.log('✅ Active promo code found from API:', appliedPromoCode, 'Discount:', discount);
+                displayPromoCodeInfo();
+            }
+            calculateTotals();
+        })
+        .catch(error => {
+            console.log('No promo code API, using session data');
+            // Session data already loaded in checkPromoCodeFromSession
+            if (discount > 0) {
+                displayPromoCodeInfo();
+            }
+            calculateTotals();
+        });
+    }
+    
+    // Display promo code info if applied
+    function displayPromoCodeInfo() {
+        if (appliedPromoCode && discount > 0) {
+            const discountEl = document.getElementById('discount');
+            if (discountEl) {
+                discountEl.parentElement.style.display = 'flex';
+                discountEl.innerHTML = `Rs. ${discount.toFixed(2)} <small>(${appliedPromoCode})</small>`;
+            }
+        }
     }
     
     // Display order items in step 1
@@ -259,7 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="order-item-info">
                     <div class="order-item-title">${item.title}</div>
                     <div class="order-item-author">by ${item.author}</div>
-                    <div class="order-item-price">Rs. ${item.price}</div>
+                    <div class="order-item-price">
+                        Rs. ${item.price}
+                        ${item.originalPrice ? `<span class="original-price">Rs. ${item.originalPrice}</span>` : ''}
+                    </div>
                 </div>
                 <div class="order-item-quantity">
                     <strong>Qty: ${item.quantity}</strong>
@@ -287,10 +349,14 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
     }
     
-    // Calculate totals
+    // Calculate totals with promo discount
     function calculateTotals() {
         subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        // Free shipping for orders over Rs. 3000
         shipping = subtotal >= 3000 ? 0 : 250;
+        
+        // Total calculation with discount
         total = subtotal + shipping - discount;
         
         updateTotalsDisplay();
@@ -305,7 +371,17 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (subtotalEl) subtotalEl.textContent = `Rs. ${subtotal.toFixed(2)}`;
         if (shippingEl) shippingEl.textContent = shipping === 0 ? 'Free' : `Rs. ${shipping.toFixed(2)}`;
-        if (discountEl) discountEl.textContent = `Rs. ${discount.toFixed(2)}`;
+        if (discountEl) {
+            if (discount > 0) {
+                discountEl.parentElement.style.display = 'flex';
+                discountEl.textContent = `Rs. ${discount.toFixed(2)}`;
+                if (appliedPromoCode) {
+                    discountEl.innerHTML = `Rs. ${discount.toFixed(2)} <small style="color: #27ae60;">(${appliedPromoCode})</small>`;
+                }
+            } else {
+                discountEl.parentElement.style.display = 'none';
+            }
+        }
         if (totalEl) totalEl.textContent = `Rs. ${total.toFixed(2)}`;
     }
     
@@ -430,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.closeModal = closeModal;
     }
     
-    // Handle checkout submission
+    // Handle checkout submission with promo code
     function handleCheckout(e) {
         e.preventDefault();
         
@@ -448,15 +524,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // Create order data with all pricing details
         const orderData = {
             fullName: formData.get('fullName'),
             contactNumber: formData.get('contactNumber'),
             shippingAddress: formData.get('shippingAddress'),
             orderNotes: formData.get('orderNotes'),
             paymentMethod: paymentMethod,
+            subtotal: subtotal,
+            shipping: shipping,
+            discount: discount,
+            promoCode: appliedPromoCode,
             totalAmount: total,
             items: cartItems.map(item => ({
-                itemId: item.productId,
+                itemId: item.productId || item.itemId,
                 quantity: item.quantity,
                 price: item.price
             }))
@@ -472,10 +553,15 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
         
+        console.log('📤 Sending order data:', {
+            ...orderData,
+            cardDetails: orderData.cardDetails ? '***HIDDEN***' : undefined
+        });
+        
         placeOrder(orderData);
     }
     
-    // Place order
+    // Place order with promo code support
     function placeOrder(orderData) {
         console.log('🛍️ Placing order...', orderData);
         
@@ -520,10 +606,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Fallback for demo
                 const fallbackData = {
-                    orderId: Math.floor(Math.random() * 10000) + 1000,
+                    orderId: 'ORD' + Date.now(),
                     totalAmount: total,
                     paymentMethod: orderData.paymentMethod,
-                    transactionId: orderData.paymentMethod === 'online' ? 'TXN' + Date.now() : null
+                    transactionId: orderData.paymentMethod === 'online' ? 'TXN' + Date.now() : null,
+                    promoCode: appliedPromoCode,
+                    discount: discount
                 };
                 
                 if (orderData.paymentMethod === 'online') {
@@ -534,10 +622,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }, processingDelay);
     }
     
-    // Show order success modal
+    // Show order success modal with promo info
     function showOrderSuccess(data) {
-        document.getElementById('orderIdDisplay').textContent = `#${data.orderId}`;
-        document.getElementById('totalAmountDisplay').textContent = `Rs. ${data.totalAmount.toFixed(2)}`;
+        // Use the total amount from our calculation (which includes discount)
+        const displayTotal = data.totalAmount || total;
+        
+        document.getElementById('orderIdDisplay').textContent = data.orderId;
+        document.getElementById('totalAmountDisplay').textContent = `Rs. ${displayTotal.toFixed(2)}`;
         
         // Get the actual selected payment method from form
         const selectedPaymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
@@ -565,15 +656,20 @@ document.addEventListener('DOMContentLoaded', () => {
             transactionRow.style.display = 'none';
         }
         
+        // Store order data for receipt printing
         orderData.orderId = data.orderId;
-        orderData.totalAmount = data.totalAmount;
+        orderData.totalAmount = displayTotal;
         orderData.transactionId = selectedPaymentMethod === 'online' ? (data.transactionId || 'TXN' + Date.now()) : null;
         orderData.paymentMethod = selectedPaymentMethod;
+        orderData.promoCode = appliedPromoCode;
+        orderData.discount = discount;
+        orderData.subtotal = subtotal;
+        orderData.shipping = shipping;
         
         const modal = document.getElementById('orderSuccessModal');
         modal.style.display = 'block';
         
-        // Clear cart after successful order
+        // Clear cart and promo after successful order
         clearCartAfterOrder();
         
         if (selectedPaymentMethod === 'online') {
@@ -583,8 +679,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Clear cart after order
+    // Clear cart and promo after order
     function clearCartAfterOrder() {
+        // Clear cart
         fetch(`${baseUrl}/customer/cart/clear`, {
             method: 'POST'
         })
@@ -597,6 +694,10 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(error => {
             console.log('Cart clear error:', error);
         });
+        
+        // Clear promo code from session
+        sessionStorage.removeItem('appliedPromoCode');
+        sessionStorage.removeItem('promoDiscountAmount');
     }
     
     // Modal functions
@@ -622,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Generate receipt for printing
+    // Generate receipt for printing with promo info
     function generateReceipt() {
         // Get the actual selected payment method from form
         const selectedPaymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
@@ -639,10 +740,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="receipt-info">
                     <div class="receipt-section">
                         <h3>Order Information</h3>
-                        <p><strong>Order ID:</strong> #${orderData.orderId}</p>
+                        <p><strong>Order ID:</strong> ${orderData.orderId}</p>
                         <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
                         <p><strong>Payment Method:</strong> ${paymentMethodDisplay}</p>
                         ${selectedPaymentMethod === 'online' && orderData.transactionId ? `<p><strong>Transaction ID:</strong> ${orderData.transactionId}</p>` : ''}
+                        ${appliedPromoCode ? `<p><strong>Promo Code:</strong> ${appliedPromoCode}</p>` : ''}
                     </div>
                     
                     <div class="receipt-section">
@@ -685,10 +787,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span>Shipping:</span>
                         <span>${shipping === 0 ? 'Free' : 'Rs. ' + shipping.toFixed(2)}</span>
                     </div>
+                    ${discount > 0 ? `
                     <div class="total-row">
-                        <span>Discount:</span>
+                        <span>Discount ${appliedPromoCode ? '(' + appliedPromoCode + ')' : ''}:</span>
                         <span>Rs. ${discount.toFixed(2)}</span>
                     </div>
+                    ` : ''}
                     <div class="total-row total-final">
                         <span><strong>Total:</strong></span>
                         <span><strong>Rs. ${total.toFixed(2)}</strong></span>
@@ -699,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>Thank you for your order!</p>
                     <p>Delivery within 3-5 business days</p>
                     ${selectedPaymentMethod === 'online' ? '<p style="color: #27ae60;">✅ Payment Completed</p>' : '<p style="color: #f39c12;">💰 Cash on Delivery</p>'}
+                    ${discount > 0 ? '<p style="color: #27ae60;">🎉 You saved Rs. ' + discount.toFixed(2) + ' with promo code!</p>' : ''}
                 </div>
             </div>
         `;
@@ -767,4 +872,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toast.className = 'toast';
         }
     }
+    
+    console.log('✅ Checkout page initialized with promo code support');
 });

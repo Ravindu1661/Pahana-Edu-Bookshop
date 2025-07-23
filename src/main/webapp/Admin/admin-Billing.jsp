@@ -12,6 +12,7 @@
     <!-- Page Header -->
     <div class="billing-header">
         <h2>💳 Order & Billing Management</h2>
+        <p class="header-subtitle">Manage orders, view billing details, and track promo code usage</p>
     </div>
     
     <!-- Statistics Cards -->
@@ -95,8 +96,8 @@
                 <tr>
                     <th>ORDER ID</th>
                     <th>CUSTOMER</th>
-                    <th>ITEMS</th>
-                    <th>TOTAL AMOUNT</th>
+                    <th>ITEMS PREVIEW</th>
+                    <th>AMOUNT & PROMOS</th>
                     <th>PAYMENT METHOD</th>
                     <th>STATUS</th>
                     <th>ORDER DATE</th>
@@ -127,7 +128,7 @@
             <div class="order-details">
                 <!-- Order Information -->
                 <div class="detail-section">
-                    <h4>📋 Order Information</h4>
+                    <h4><i class="fas fa-info-circle"></i> Order Information</h4>
                     <div class="detail-row">
                         <span class="detail-label">Order ID:</span>
                         <span class="detail-value" id="detailOrderId">-</span>
@@ -156,21 +157,32 @@
                 
                 <!-- Shipping Information -->
                 <div class="detail-section">
-                    <h4>🚚 Shipping Information</h4>
+                    <h4><i class="fas fa-shipping-fast"></i> Shipping Information</h4>
                     <div class="detail-row">
                         <span class="detail-label">Address:</span>
                         <span class="detail-value" id="detailShippingAddress">-</span>
                     </div>
                 </div>
                 
-                <!-- Order Items -->
+                <!-- Order Summary -->
                 <div class="detail-section">
-                    <h4>📦 Order Items</h4>
-                    <table class="items-table">
+                    <h4><i class="fas fa-receipt"></i> Order Summary</h4>
+                    <div class="order-summary-grid">
+                        <div class="summary-item">
+                            <label>Total Amount:</label>
+                            <span id="detailTotalAmount" class="total-amount">Rs. 0.00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Order Items & Pricing Breakdown -->
+                <div class="detail-section">
+                    <h4><i class="fas fa-list"></i> Order Items & Pricing</h4>
+                    <table class="order-items-table">
                         <thead>
                             <tr>
-                                <th>Item</th>
-                                <th>Price</th>
+                                <th>Item Details</th>
+                                <th>Unit Price</th>
                                 <th>Quantity</th>
                                 <th>Total</th>
                             </tr>
@@ -181,17 +193,11 @@
                             </tr>
                         </tbody>
                     </table>
-                    
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #3498db; text-align: right;">
-                        <strong style="font-size: 1.1rem; color: #27ae60;">
-                            Total Amount: <span id="detailTotalAmount">Rs. 0.00</span>
-                        </strong>
-                    </div>
                 </div>
                 
                 <!-- Status Management -->
                 <div class="detail-section">
-                    <h4>⚙️ Status Management</h4>
+                    <h4><i class="fas fa-cog"></i> Status Management</h4>
                     <div class="status-controls">
                         <label for="newOrderStatus" style="font-weight: 500;">Update Status:</label>
                         <select id="newOrderStatus">
@@ -202,7 +208,7 @@
                             <option value="cancelled">Cancelled</option>
                         </select>
                         <button class="btn-update" onclick="updateOrderStatus()">
-                            Update Status
+                            <i class="fas fa-sync"></i> Update Status
                         </button>
                     </div>
                 </div>
@@ -210,7 +216,9 @@
         </div>
         
         <div class="modal-footer">
-            <button type="button" class="btn btn-view" onclick="closeOrderModal()">Close</button>
+            <button type="button" class="btn btn-secondary" onclick="closeOrderModal()">
+                <i class="fas fa-times"></i> Close
+            </button>
         </div>
     </div>
 </div>
@@ -225,6 +233,5 @@
 
 <!-- Include FontAwesome for icons -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
 <!-- Include CSS -->
 <link rel="stylesheet" href="assets/css/Admin/admin-Billing.css">

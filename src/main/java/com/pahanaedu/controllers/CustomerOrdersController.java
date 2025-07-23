@@ -2,6 +2,7 @@ package com.pahanaedu.controllers;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
 import java.util.List;
 
 import javax.servlet.ServletException;
@@ -17,24 +18,21 @@ import com.google.gson.JsonArray;
 
 import com.pahanaedu.dao.OrderDAO;
 import com.pahanaedu.models.Order;
-import com.pahanaedu.models.User;
 
 /**
- * Customer Orders Controller - Updated for your database structure
+ * Customer Orders Controller - Enhanced with Promo Code Support
  */
 @WebServlet("/customer/orders/*")
 public class CustomerOrdersController extends HttpServlet {
     private static final long serialVersionUID = 1L;
     
     private OrderDAO orderDAO;
-    private Gson gson;
-    
     @Override
     public void init() throws ServletException {
         try {
             orderDAO = new OrderDAO();
-            gson = new Gson();
-            System.out.println("CustomerOrdersController: Initialized successfully");
+            new Gson();
+            System.out.println("CustomerOrdersController: Initialized successfully with promo code support");
         } catch (Exception e) {
             System.err.println("CustomerOrdersController: Failed to initialize - " + e.getMessage());
             throw new ServletException("Failed to initialize", e);
@@ -116,7 +114,7 @@ public class CustomerOrdersController extends HttpServlet {
     }
     
     /**
-     * Handle get user orders request
+     * Handle get user orders request - Enhanced with promo code support
      */
     private void handleGetUserOrders(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -147,34 +145,7 @@ public class CustomerOrdersController extends HttpServlet {
             
             JsonArray ordersArray = new JsonArray();
             for (Order order : orders) {
-                JsonObject orderObj = new JsonObject();
-                orderObj.addProperty("id", order.getId());
-                orderObj.addProperty("userId", order.getUserId());
-                orderObj.addProperty("totalAmount", order.getTotalAmount());
-                orderObj.addProperty("status", order.getStatus());
-                orderObj.addProperty("shippingAddress", order.getShippingAddress());
-                orderObj.addProperty("contactNumber", order.getContactNumber());
-                orderObj.addProperty("paymentMethod", order.getPaymentMethod());
-                orderObj.addProperty("createdAt", order.getCreatedAt().toString());
-                orderObj.addProperty("customerName", order.getCustomerName());
-                
-                // Add order items
-                JsonArray itemsArray = new JsonArray();
-                if (order.getOrderItems() != null) {
-                    order.getOrderItems().forEach(item -> {
-                        JsonObject itemObj = new JsonObject();
-                        itemObj.addProperty("id", item.getId());
-                        itemObj.addProperty("itemId", item.getItemId());
-                        itemObj.addProperty("quantity", item.getQuantity());
-                        itemObj.addProperty("price", item.getPrice());
-                        itemObj.addProperty("itemTitle", item.getItemTitle());
-                        itemObj.addProperty("itemAuthor", item.getItemAuthor());
-                        itemObj.addProperty("itemImagePath", item.getItemImagePath());
-                        itemsArray.add(itemObj);
-                    });
-                }
-                orderObj.add("orderItems", itemsArray);
-                
+                JsonObject orderObj = createOrderJsonObject(order);
                 ordersArray.add(orderObj);
             }
             
@@ -183,7 +154,7 @@ public class CustomerOrdersController extends HttpServlet {
             
             out.print(responseObj.toString());
             
-            System.out.println("CustomerOrdersController: Successfully returned " + orders.size() + " orders");
+            System.out.println("CustomerOrdersController: Successfully returned " + orders.size() + " orders with promo code data");
             
         } catch (Exception e) {
             System.err.println("CustomerOrdersController: Error getting user orders - " + e.getMessage());
@@ -195,7 +166,7 @@ public class CustomerOrdersController extends HttpServlet {
     }
     
     /**
-     * Handle get order by ID request
+     * Handle get order by ID request - Enhanced with promo code support
      */
     private void handleGetOrderById(HttpServletRequest request, HttpServletResponse response, int orderId) 
             throws IOException {
@@ -230,37 +201,12 @@ public class CustomerOrdersController extends HttpServlet {
             responseObj.addProperty("success", true);
             responseObj.addProperty("message", "Order retrieved successfully");
             
-            JsonObject orderObj = new JsonObject();
-            orderObj.addProperty("id", order.getId());
-            orderObj.addProperty("userId", order.getUserId());
-            orderObj.addProperty("totalAmount", order.getTotalAmount());
-            orderObj.addProperty("status", order.getStatus());
-            orderObj.addProperty("shippingAddress", order.getShippingAddress());
-            orderObj.addProperty("contactNumber", order.getContactNumber());
-            orderObj.addProperty("paymentMethod", order.getPaymentMethod());
-            orderObj.addProperty("createdAt", order.getCreatedAt().toString());
-            orderObj.addProperty("customerName", order.getCustomerName());
-            
-            // Add order items
-            JsonArray itemsArray = new JsonArray();
-            if (order.getOrderItems() != null) {
-                order.getOrderItems().forEach(item -> {
-                    JsonObject itemObj = new JsonObject();
-                    itemObj.addProperty("id", item.getId());
-                    itemObj.addProperty("itemId", item.getItemId());
-                    itemObj.addProperty("quantity", item.getQuantity());
-                    itemObj.addProperty("price", item.getPrice());
-                    itemObj.addProperty("itemTitle", item.getItemTitle());
-                    itemObj.addProperty("itemAuthor", item.getItemAuthor());
-                    itemObj.addProperty("itemImagePath", item.getItemImagePath());
-                    itemsArray.add(itemObj);
-                });
-            }
-            orderObj.add("orderItems", itemsArray);
-            
+            JsonObject orderObj = createOrderJsonObject(order);
             responseObj.add("order", orderObj);
             
             out.print(responseObj.toString());
+            
+            System.out.println("CustomerOrdersController: Successfully returned order " + orderId + " with promo code data");
             
         } catch (Exception e) {
             System.err.println("CustomerOrdersController: Error getting order by ID - " + e.getMessage());
@@ -269,6 +215,125 @@ public class CustomerOrdersController extends HttpServlet {
         } finally {
             out.close();
         }
+    }
+    
+    /**
+     * Create comprehensive order JSON object with promo code support
+     */
+    private JsonObject createOrderJsonObject(Order order) {
+        JsonObject orderObj = new JsonObject();
+        
+        // Basic order information
+        orderObj.addProperty("id", order.getId());
+        orderObj.addProperty("userId", order.getUserId());
+        orderObj.addProperty("totalAmount", order.getTotalAmount());
+        orderObj.addProperty("status", order.getStatus());
+        orderObj.addProperty("shippingAddress", order.getShippingAddress());
+        orderObj.addProperty("contactNumber", order.getContactNumber());
+        orderObj.addProperty("paymentMethod", order.getPaymentMethod());
+        orderObj.addProperty("createdAt", order.getCreatedAt().toString());
+        orderObj.addProperty("customerName", order.getCustomerName());
+        orderObj.addProperty("orderNotes", order.getOrderNotes());
+        
+        // Enhanced pricing information with promo code support
+        if (order.getSubtotal() != null) {
+            orderObj.addProperty("subtotal", order.getSubtotal());
+        }
+        
+        if (order.getShippingAmount() != null) {
+            orderObj.addProperty("shippingAmount", order.getShippingAmount());
+        }
+        
+        if (order.getDiscountAmount() != null) {
+            orderObj.addProperty("discountAmount", order.getDiscountAmount());
+        }
+        
+        // Promo code information
+        if (order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty()) {
+            orderObj.addProperty("promoCode", order.getPromoCode());
+            System.out.println("CustomerOrdersController: Order " + order.getId() + " has promo code: " + order.getPromoCode());
+        }
+        
+        // Transaction ID for online payments
+        if (order.getTransactionId() != null && !order.getTransactionId().trim().isEmpty()) {
+            orderObj.addProperty("transactionId", order.getTransactionId());
+        }
+        
+        // Calculate breakdown for frontend compatibility
+        BigDecimal subtotal = order.getSubtotal() != null ? order.getSubtotal() : BigDecimal.ZERO;
+        BigDecimal shipping = order.getShippingAmount() != null ? order.getShippingAmount() : BigDecimal.ZERO;
+        BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        
+        // If we don't have breakdown data, calculate from order items
+        if (subtotal.equals(BigDecimal.ZERO) && order.getOrderItems() != null) {
+            subtotal = order.getOrderItems().stream()
+                .map(item -> item.getPrice().multiply(new BigDecimal(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            // Apply free shipping rule
+            shipping = subtotal.compareTo(new BigDecimal("3000")) >= 0 ? BigDecimal.ZERO : new BigDecimal("250");
+            
+            // Calculate discount if total amount is available
+            if (order.getTotalAmount() != null) {
+                BigDecimal expectedTotal = subtotal.add(shipping);
+                discount = expectedTotal.subtract(order.getTotalAmount());
+                if (discount.compareTo(BigDecimal.ZERO) < 0) {
+                    discount = BigDecimal.ZERO;
+                }
+            }
+        }
+        
+        // Add calculated values for frontend
+        orderObj.addProperty("calculatedSubtotal", subtotal);
+        orderObj.addProperty("calculatedShipping", shipping);
+        orderObj.addProperty("calculatedDiscount", discount);
+        
+        // Add order items with enhanced details
+        JsonArray itemsArray = new JsonArray();
+        if (order.getOrderItems() != null) {
+            order.getOrderItems().forEach(item -> {
+                JsonObject itemObj = new JsonObject();
+                itemObj.addProperty("id", item.getId());
+                itemObj.addProperty("itemId", item.getItemId());
+                itemObj.addProperty("quantity", item.getQuantity());
+                itemObj.addProperty("price", item.getPrice());
+                itemObj.addProperty("itemTitle", item.getItemTitle());
+                itemObj.addProperty("itemAuthor", item.getItemAuthor());
+                itemObj.addProperty("itemImagePath", item.getItemImagePath());
+                
+                // Calculate item total
+                BigDecimal itemTotal = item.getPrice().multiply(new BigDecimal(item.getQuantity()));
+                itemObj.addProperty("itemTotal", itemTotal);
+                
+                itemsArray.add(itemObj);
+            });
+        }
+        orderObj.add("orderItems", itemsArray);
+        
+        // Add summary information for frontend
+        orderObj.addProperty("itemCount", order.getOrderItems() != null ? order.getOrderItems().size() : 0);
+        int totalQuantity = order.getOrderItems() != null ? 
+            order.getOrderItems().stream().mapToInt(item -> item.getQuantity()).sum() : 0;
+        orderObj.addProperty("totalQuantity", totalQuantity);
+        
+        // Add promo code savings information
+        if (discount.compareTo(BigDecimal.ZERO) > 0 && order.getPromoCode() != null) {
+            orderObj.addProperty("promoSavings", discount);
+            orderObj.addProperty("hasPromoDiscount", true);
+        } else {
+            orderObj.addProperty("hasPromoDiscount", false);
+        }
+        
+        // Add payment status information
+        if ("online".equals(order.getPaymentMethod())) {
+            orderObj.addProperty("isOnlinePayment", true);
+            orderObj.addProperty("paymentStatus", order.getTransactionId() != null ? "completed" : "pending");
+        } else {
+            orderObj.addProperty("isOnlinePayment", false);
+            orderObj.addProperty("paymentStatus", "cod");
+        }
+        
+        return orderObj;
     }
     
     /**
@@ -305,7 +370,7 @@ public class CustomerOrdersController extends HttpServlet {
             
             // Check if order can be cancelled
             if (!order.canBeCancelled()) {
-                sendErrorResponse(response, "Order cannot be cancelled in current status");
+                sendErrorResponse(response, "Order cannot be cancelled in current status: " + order.getStatus());
                 return;
             }
             
@@ -317,6 +382,13 @@ public class CustomerOrdersController extends HttpServlet {
                 responseObj.addProperty("success", true);
                 responseObj.addProperty("message", "Order cancelled successfully");
                 responseObj.addProperty("orderId", orderId);
+                responseObj.addProperty("newStatus", Order.STATUS_CANCELLED);
+                
+                // If order had promo code, log the cancellation
+                if (order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty()) {
+                    System.out.println("CustomerOrdersController: Cancelled order " + orderId + 
+                                     " with promo code: " + order.getPromoCode());
+                }
                 
                 out.print(responseObj.toString());
                 
@@ -356,7 +428,6 @@ public class CustomerOrdersController extends HttpServlet {
     public void destroy() {
         System.out.println("CustomerOrdersController: Being destroyed");
         orderDAO = null;
-        gson = null;
         super.destroy();
     }
 }

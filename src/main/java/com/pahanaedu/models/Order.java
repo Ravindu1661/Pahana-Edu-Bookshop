@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Order model class representing a customer order
+ * Order model class representing a customer order - Enhanced with promo code support
  */
 public class Order {
     public static final String STATUS_PENDING = "pending";
@@ -24,6 +24,14 @@ public class Order {
     private String paymentMethod;
     private Timestamp createdAt;
     private Timestamp updatedAt;
+    
+    // New fields for promo code support
+    private BigDecimal subtotal;
+    private BigDecimal shippingAmount;
+    private BigDecimal discountAmount;
+    private String promoCode;
+    private String transactionId;
+    private String orderNotes;
     
     // Order items
     private List<OrderItem> orderItems;
@@ -126,6 +134,55 @@ public class Order {
         this.updatedAt = updatedAt;
     }
     
+    // New getters and setters for promo code support
+    public BigDecimal getSubtotal() {
+        return subtotal;
+    }
+    
+    public void setSubtotal(BigDecimal subtotal) {
+        this.subtotal = subtotal;
+    }
+    
+    public BigDecimal getShippingAmount() {
+        return shippingAmount;
+    }
+    
+    public void setShippingAmount(BigDecimal shippingAmount) {
+        this.shippingAmount = shippingAmount;
+    }
+    
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+    
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+    
+    public String getPromoCode() {
+        return promoCode;
+    }
+    
+    public void setPromoCode(String promoCode) {
+        this.promoCode = promoCode;
+    }
+    
+    public String getTransactionId() {
+        return transactionId;
+    }
+    
+    public void setTransactionId(String transactionId) {
+        this.transactionId = transactionId;
+    }
+    
+    public String getOrderNotes() {
+        return orderNotes;
+    }
+    
+    public void setOrderNotes(String orderNotes) {
+        this.orderNotes = orderNotes;
+    }
+    
     public List<OrderItem> getOrderItems() {
         return orderItems;
     }
@@ -173,6 +230,23 @@ public class Order {
         return orderItems.stream()
                 .map(OrderItem::getTotalPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+    
+    // Enhanced calculation method with promo support
+    public BigDecimal calculateFinalTotal() {
+        BigDecimal calculatedSubtotal = calculateTotal();
+        BigDecimal shipping = shippingAmount != null ? shippingAmount : BigDecimal.ZERO;
+        BigDecimal discount = discountAmount != null ? discountAmount : BigDecimal.ZERO;
+        
+        return calculatedSubtotal.add(shipping).subtract(discount);
+    }
+    
+    public boolean hasPromoCode() {
+        return promoCode != null && !promoCode.trim().isEmpty();
+    }
+    
+    public boolean hasDiscount() {
+        return discountAmount != null && discountAmount.compareTo(BigDecimal.ZERO) > 0;
     }
     
     public boolean isPending() {
@@ -253,6 +327,8 @@ public class Order {
                 ", totalAmount=" + totalAmount +
                 ", status='" + status + '\'' +
                 ", paymentMethod='" + paymentMethod + '\'' +
+                ", promoCode='" + promoCode + '\'' +
+                ", discount=" + discountAmount +
                 ", createdAt=" + createdAt +
                 ", itemCount=" + (orderItems != null ? orderItems.size() : 0) +
                 '}';

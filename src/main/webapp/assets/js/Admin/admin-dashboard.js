@@ -801,62 +801,82 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Display orders in table
      */
-    function displayOrders(orders) {
-        const ordersTableBody = document.getElementById('ordersTableBody');
-        if (!ordersTableBody) return;
-        
-        if (orders.length === 0) {
-            ordersTableBody.innerHTML = '<tr><td colspan="8" class="loading">📭 No orders found</td></tr>';
-            return;
-        }
-        
-        ordersTableBody.innerHTML = orders.map(order => {
-            const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            
-            const itemCount = order.orderItems ? order.orderItems.length : 0;
-            const totalItems = order.orderItems ? 
-                order.orderItems.reduce((sum, item) => sum + item.quantity, 0) : 0;
-            
-            return `
-                <tr>
-                    <td><span class="order-id">#${order.id}</span></td>
-                    <td>
-                        <div class="customer-info">
-                            <div class="customer-name">${order.customerName || 'N/A'}</div>
-                            <div class="customer-email">${order.customerEmail || 'N/A'}</div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="items-preview">
-                            ${order.orderItems && order.orderItems.length > 0 ? 
-                                `<img src="${order.orderItems[0].itemImagePath || 'https://via.placeholder.com/30x35'}" 
-                                     alt="Item" class="item-thumb" 
-                                     onerror="this.src='https://via.placeholder.com/30x35'">` : 
-                                '<span style="color: #666;">No image</span>'
-                            }
-                            <span class="items-count">${itemCount} items (${totalItems} qty)</span>
-                        </div>
-                    </td>
-                    <td><span class="amount">Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</span></td>
-                    <td><span class="payment-method payment-${(order.paymentMethod || '').toLowerCase()}">${getPaymentMethodDisplay(order.paymentMethod)}</span></td>
-                    <td><span class="status-badge status-${(order.status || '').toLowerCase()}">${getStatusDisplay(order.status)}</span></td>
-                    <td>${orderDate}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-view" onclick="viewOrderDetails(${order.id})">👁️ View</button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-    
+	function displayOrders(orders) {
+	    const ordersTableBody = document.getElementById('ordersTableBody');
+	    if (!ordersTableBody) return;
+	    
+	    if (orders.length === 0) {
+	        ordersTableBody.innerHTML = '<tr><td colspan="9" class="loading">📭 No orders found</td></tr>';
+	        return;
+	    }
+	    
+	    ordersTableBody.innerHTML = orders.map(order => {
+	        const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
+	            year: 'numeric',
+	            month: 'short',
+	            day: 'numeric',
+	            hour: '2-digit',
+	            minute: '2-digit'
+	        });
+	        
+	        const itemCount = order.orderItems ? order.orderItems.length : 0;
+	        const totalItems = order.orderItems ? 
+	            order.orderItems.reduce((sum, item) => sum + item.quantity, 0) : 0;
+	        
+	        // Calculate pricing breakdown
+	        const subtotal = order.orderItems ? 
+	            order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0) : 0;
+	        const shipping = subtotal >= 3000 ? 0 : 250;
+	        const expectedTotal = subtotal + shipping;
+	        const finalTotal = parseFloat(order.totalAmount || 0);
+	        const discount = expectedTotal - finalTotal;
+	        
+	        // Promo code display
+	        const promoCodeDisplay = order.promoCode && discount > 0 ? 
+	            `<div class="promo-info">
+	                <span class="promo-code">${order.promoCode}</span>
+	                <span class="discount-amount">-Rs. ${discount.toFixed(2)}</span>
+	             </div>` : '';
+	        
+	        return `
+	            <tr>
+	                <td><span class="order-id">#${order.id}</span></td>
+	                <td>
+	                    <div class="customer-info">
+	                        <div class="customer-name">${order.customerName || 'N/A'}</div>
+	                        <div class="customer-email">${order.customerEmail || 'N/A'}</div>
+	                    </div>
+	                </td>
+	                <td>
+	                    <div class="items-preview">
+	                        ${order.orderItems && order.orderItems.length > 0 ? 
+	                            `<img src="${order.orderItems[0].itemImagePath || 'https://via.placeholder.com/30x35'}" 
+	                                 alt="Item" class="item-thumb" 
+	                                 onerror="this.src='https://via.placeholder.com/30x35'">` : 
+	                            '<span style="color: #666;">No image</span>'
+	                        }
+	                        <span class="items-count">${itemCount} items (${totalItems} qty)</span>
+	                    </div>
+	                </td>
+	                <td>
+	                    <div class="amount-display">
+	                        <span class="final-amount">Rs. ${finalTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+	                        ${promoCodeDisplay}
+	                    </div>
+	                </td>
+	                <td><span class="payment-method payment-${(order.paymentMethod || '').toLowerCase()}">${getPaymentMethodDisplay(order.paymentMethod)}</span></td>
+	                <td><span class="status-badge status-${(order.status || '').toLowerCase()}">${getStatusDisplay(order.status)}</span></td>
+	                <td>${orderDate}</td>
+	                <td>
+	                    <div class="action-buttons">
+	                        <button class="btn btn-view" onclick="viewOrderDetails(${order.id})">👁️ View</button>
+	                    </div>
+	                </td>
+	            </tr>
+	        `;
+	    }).join('');
+	}
+
     /**
      * Show orders error
      */
@@ -2209,110 +2229,171 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * View order details
      */
-    function viewOrderDetails(orderId) {
-        console.log('👁️ Viewing order details:', orderId);
-        
-        const order = currentOrders.find(o => o.id === orderId);
-        if (!order) {
-            showToast('Order not found', 'error');
-            return;
-        }
-        
-        currentOrderDetails = order;
-        
-        // Populate order details modal
-        const modalTitle = document.getElementById('modalTitle');
-        if (modalTitle) modalTitle.textContent = `Order #${order.id} Details`;
-        
-        const detailElements = {
-            detailOrderId: order.id || 'N/A',
-            detailCustomerName: order.customerName || 'N/A',
-            detailCustomerEmail: order.customerEmail || 'N/A',
-            detailContactNumber: order.contactNumber || 'N/A',
-            detailPaymentMethod: getPaymentMethodDisplay(order.paymentMethod),
-            detailShippingAddress: order.shippingAddress || 'N/A',
-            detailTotalAmount: `Rs. ${parseFloat(order.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`
-        };
-        
-        // Update detail elements
-        Object.keys(detailElements).forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.textContent = detailElements[id];
-            }
-        });
-        
-        const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        
-        const detailOrderDate = document.getElementById('detailOrderDate');
-        if (detailOrderDate) detailOrderDate.textContent = orderDate;
-        
-        // Set current status in dropdown
-        const statusSelect = document.getElementById('newOrderStatus');
-        if (statusSelect) {
-            statusSelect.value = order.status || 'pending';
-        }
-        
-        // Display order items
-        displayOrderItemsInModal(order.orderItems || []);
-        
-        // Show modal
-        const modal = document.getElementById('orderDetailsModal');
-        if (modal) {
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-    
+	function viewOrderDetails(orderId) {
+	    console.log('👁️ Viewing order details:', orderId);
+	    
+	    const order = currentOrders.find(o => o.id === orderId);
+	    if (!order) {
+	        showToast('Order not found', 'error');
+	        return;
+	    }
+	    
+	    currentOrderDetails = order;
+	    
+	    // Calculate pricing breakdown
+	    const subtotal = order.orderItems ? 
+	        order.orderItems.reduce((sum, item) => sum + (item.price * item.quantity), 0) : 0;
+	    const shipping = subtotal >= 3000 ? 0 : 250;
+	    const expectedTotal = subtotal + shipping;
+	    const finalTotal = parseFloat(order.totalAmount || 0);
+	    const discount = expectedTotal - finalTotal;
+	    
+	    // Populate order details modal
+	    const modalTitle = document.getElementById('modalTitle');
+	    if (modalTitle) modalTitle.textContent = `Order #${order.id} Details`;
+	    
+	    const detailElements = {
+	        detailOrderId: order.id || 'N/A',
+	        detailCustomerName: order.customerName || 'N/A',
+	        detailCustomerEmail: order.customerEmail || 'N/A',
+	        detailContactNumber: order.contactNumber || 'N/A',
+	        detailPaymentMethod: getPaymentMethodDisplay(order.paymentMethod),
+	        detailShippingAddress: order.shippingAddress || 'N/A'
+	    };
+	    
+	    // Update detail elements
+	    Object.keys(detailElements).forEach(id => {
+	        const element = document.getElementById(id);
+	        if (element) {
+	            element.textContent = detailElements[id];
+	        }
+	    });
+	    
+	    // Update total amount with promo code info
+	    const detailTotalAmount = document.getElementById('detailTotalAmount');
+	    if (detailTotalAmount) {
+	        if (order.promoCode && discount > 0) {
+	            detailTotalAmount.innerHTML = `
+	                <div class="total-breakdown">
+	                    <div class="original-total">Original: Rs. ${expectedTotal.toFixed(2)}</div>
+	                    <div class="promo-discount">
+	                        <span class="promo-code-badge">${order.promoCode}</span>
+	                        <span class="discount-amount">-Rs. ${discount.toFixed(2)}</span>
+	                    </div>
+	                    <div class="final-total">Final: Rs. ${finalTotal.toFixed(2)}</div>
+	                </div>
+	            `;
+	        } else {
+	            detailTotalAmount.textContent = `Rs. ${finalTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+	        }
+	    }
+	    
+	    const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', {
+	        year: 'numeric',
+	        month: 'long',
+	        day: 'numeric',
+	        hour: '2-digit',
+	        minute: '2-digit'
+	    });
+	    
+	    const detailOrderDate = document.getElementById('detailOrderDate');
+	    if (detailOrderDate) detailOrderDate.textContent = orderDate;
+	    
+	    // Set current status in dropdown
+	    const statusSelect = document.getElementById('newOrderStatus');
+	    if (statusSelect) {
+	        statusSelect.value = order.status || 'pending';
+	    }
+	    
+	    // Display order items with pricing breakdown
+	    displayOrderItemsInModalWithPromo(order.orderItems || [], order.promoCode, subtotal, shipping, discount, finalTotal);
+	    
+	    // Show modal
+	    const modal = document.getElementById('orderDetailsModal');
+	    if (modal) {
+	        modal.style.display = 'block';
+	        document.body.style.overflow = 'hidden';
+	    }
+	}
     /**
      * Display order items in modal
      */
-    function displayOrderItemsInModal(orderItems) {
-        const orderItemsTableBody = document.getElementById('orderItemsTableBody');
-        
-        if (!orderItemsTableBody) {
-            console.error('❌ Order items table body not found');
-            return;
-        }
-        
-        if (orderItems.length === 0) {
-            orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading">No items found</td></tr>';
-            return;
-        }
-        
-        const defaultImage = 'https://via.placeholder.com/40x50';
-        orderItemsTableBody.innerHTML = orderItems.map(item => {
-            const itemTotal = parseFloat(item.price || 0) * parseInt(item.quantity || 0);
-            
-            return `
-                <tr>
-                    <td>
-                        <div class="item-details" style="display: flex; align-items: center;">
-                            <img src="${item.itemImagePath || defaultImage}" 
-                                 alt="${item.itemTitle}" 
-                                 class="item-image" 
-                                 style="width: 40px; height: 50px; object-fit: cover; margin-right: 10px;"
-                                 onerror="this.src='${defaultImage}'">
-                            <div class="item-info">
-                                <h6 style="margin: 0; font-size: 14px;">${item.itemTitle || 'N/A'}</h6>
-                                <small style="color: #666;">by ${item.itemAuthor || 'Unknown'}</small>
-                            </div>
-                        </div>
-                    </td>
-                    <td><strong>Rs. ${parseFloat(item.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                    <td><span class="items-count">${item.quantity || 0}</span></td>
-                    <td><strong>Rs. ${itemTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
-                </tr>
-            `;
-        }).join('');
-    }
-    
+	function displayOrderItemsInModalWithPromo(orderItems, promoCode, subtotal, shipping, discount, finalTotal) {
+	    const orderItemsTableBody = document.getElementById('orderItemsTableBody');
+	    
+	    if (!orderItemsTableBody) {
+	        console.error('❌ Order items table body not found');
+	        return;
+	    }
+	    
+	    if (orderItems.length === 0) {
+	        orderItemsTableBody.innerHTML = '<tr><td colspan="4" class="loading">No items found</td></tr>';
+	        return;
+	    }
+	    
+	    const defaultImage = 'https://via.placeholder.com/40x50';
+	    
+	    // Items rows
+	    const itemsHTML = orderItems.map(item => {
+	        const itemTotal = parseFloat(item.price || 0) * parseInt(item.quantity || 0);
+	        
+	        return `
+	            <tr>
+	                <td>
+	                    <div class="item-details" style="display: flex; align-items: center;">
+	                        <img src="${item.itemImagePath || defaultImage}" 
+	                             alt="${item.itemTitle}" 
+	                             class="item-image" 
+	                             style="width: 40px; height: 50px; object-fit: cover; margin-right: 10px;"
+	                             onerror="this.src='${defaultImage}'">
+	                        <div class="item-info">
+	                            <h6 style="margin: 0; font-size: 14px;">${item.itemTitle || 'N/A'}</h6>
+	                            <small style="color: #666;">by ${item.itemAuthor || 'Unknown'}</small>
+	                        </div>
+	                    </div>
+	                </td>
+	                <td><strong>Rs. ${parseFloat(item.price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+	                <td><span class="items-count">${item.quantity || 0}</span></td>
+	                <td><strong>Rs. ${itemTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</strong></td>
+	            </tr>
+	        `;
+	    }).join('');
+	    
+	    // Pricing breakdown rows
+	    const pricingBreakdownHTML = `
+	        <tr class="pricing-separator">
+	            <td colspan="4" style="border-top: 2px solid #dee2e6; padding: 5px 0;"></td>
+	        </tr>
+	        <tr class="pricing-row">
+	            <td colspan="3" style="text-align: right; font-weight: 600;">Subtotal:</td>
+	            <td><strong>Rs. ${subtotal.toFixed(2)}</strong></td>
+	        </tr>
+	        <tr class="pricing-row">
+	            <td colspan="3" style="text-align: right; font-weight: 600;">Shipping:</td>
+	            <td><strong>${shipping === 0 ? 'Free' : 'Rs. ' + shipping.toFixed(2)}</strong></td>
+	        </tr>
+	        ${promoCode && discount > 0 ? `
+	        <tr class="pricing-row promo-row">
+	            <td colspan="3" style="text-align: right; font-weight: 600; color: #27ae60;">
+	                Discount (${promoCode}):
+	            </td>
+	            <td><strong style="color: #e74c3c;">-Rs. ${discount.toFixed(2)}</strong></td>
+	        </tr>
+	        ` : ''}
+	        <tr class="pricing-row total-row">
+	            <td colspan="3" style="text-align: right; font-weight: 600; font-size: 1.1em; border-top: 2px solid #dee2e6; padding-top: 10px;">
+	                Total:
+	            </td>
+	            <td style="border-top: 2px solid #dee2e6; padding-top: 10px;">
+	                <strong style="font-size: 1.1em;">Rs. ${finalTotal.toFixed(2)}</strong>
+	                ${promoCode && discount > 0 ? `<br><small style="color: #27ae60;">🎉 Saved Rs. ${discount.toFixed(2)}!</small>` : ''}
+	            </td>
+	        </tr>
+	    `;
+	    
+	    orderItemsTableBody.innerHTML = itemsHTML + pricingBreakdownHTML;
+	}
+
     /**
      * Update order status
      */

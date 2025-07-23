@@ -21,13 +21,15 @@ import com.google.gson.JsonArray;
 import com.pahanaedu.dao.OrderDAO;
 import com.pahanaedu.dao.CartDAO;
 import com.pahanaedu.dao.ItemDAO;
+import com.pahanaedu.dao.PromoCodeDAO;
 import com.pahanaedu.models.Order;
 import com.pahanaedu.models.OrderItem;
 import com.pahanaedu.models.Cart;
 import com.pahanaedu.models.Item;
+import com.pahanaedu.models.PromoCode;
 
 /**
- * Checkout Controller - Production Version with Payment Method Fix
+ * Checkout Controller - Enhanced with Promo Code Support
  */
 @WebServlet("/checkout/*")
 public class CheckoutController extends HttpServlet {
@@ -36,7 +38,7 @@ public class CheckoutController extends HttpServlet {
     private OrderDAO orderDAO;
     private CartDAO cartDAO;
     private ItemDAO itemDAO;
-    private Gson gson;
+    private PromoCodeDAO promoCodeDAO;
     
     @Override
     public void init() throws ServletException {
@@ -44,8 +46,9 @@ public class CheckoutController extends HttpServlet {
             orderDAO = new OrderDAO();
             cartDAO = new CartDAO();
             itemDAO = new ItemDAO();
-            gson = new Gson();
-            System.out.println("CheckoutController: Production version initialized successfully");
+            promoCodeDAO = new PromoCodeDAO();
+            new Gson();
+            System.out.println("CheckoutController: Initialized with promo code support");
         } catch (Exception e) {
             System.err.println("CheckoutController: Failed to initialize - " + e.getMessage());
             throw new ServletException("Failed to initialize", e);
@@ -135,7 +138,7 @@ public class CheckoutController extends HttpServlet {
     }
     
     /**
-     * Handle place order request with enhanced payment processing
+     * Handle place order request with promo code support
      */
     private void handlePlaceOrder(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -168,7 +171,38 @@ public class CheckoutController extends HttpServlet {
             String shippingAddress = jsonObject.get("shippingAddress").getAsString();
             String orderNotes = jsonObject.has("orderNotes") ? jsonObject.get("orderNotes").getAsString() : "";
             String paymentMethod = jsonObject.get("paymentMethod").getAsString();
+            
+            // Extract pricing details with promo code
+            BigDecimal subtotal = jsonObject.get("subtotal").getAsBigDecimal();
+            BigDecimal shipping = jsonObject.get("shipping").getAsBigDecimal();
+            BigDecimal discount = jsonObject.has("discount") ? jsonObject.get("discount").getAsBigDecimal() : BigDecimal.ZERO;
+            String promoCode = jsonObject.has("promoCode") && !jsonObject.get("promoCode").isJsonNull() ? 
+                              jsonObject.get("promoCode").getAsString() : null;
             BigDecimal totalAmount = jsonObject.get("totalAmount").getAsBigDecimal();
+            
+            // Log pricing details
+            System.out.println("CheckoutController: Order pricing - Subtotal: " + subtotal + 
+                             ", Shipping: " + shipping + ", Discount: " + discount + 
+                             ", Promo: " + promoCode + ", Total: " + totalAmount);
+            
+            // Validate promo code if provided
+            if (promoCode != null && !promoCode.trim().isEmpty()) {
+                PromoCode promoCodeObj = promoCodeDAO.getPromoCodeByCode(promoCode.trim());
+                if (promoCodeObj == null || !promoCodeObj.isValidForOrder(subtotal)) {
+                    sendErrorResponse(response, "Invalid or expired promo code");
+                    return;
+                }
+                
+                // Verify discount amount matches
+                BigDecimal calculatedDiscount = promoCodeObj.calculateDiscount(subtotal);
+                if (calculatedDiscount.compareTo(discount) != 0) {
+                    System.out.println("CheckoutController: Discount mismatch - Expected: " + calculatedDiscount + 
+                                     ", Received: " + discount);
+                    // Use the calculated discount for safety
+                    discount = calculatedDiscount;
+                    totalAmount = subtotal.add(shipping).subtract(discount);
+                }
+            }
             
             // Enhanced validation
             if (fullName == null || fullName.trim().isEmpty()) {
@@ -202,14 +236,24 @@ public class CheckoutController extends HttpServlet {
                 return;
             }
             
-            // Create order
+            // Create order with all pricing details
             Order order = new Order();
             order.setUserId(userId);
+            order.setSubtotal(subtotal);
+            order.setShippingAmount(shipping);
+            order.setDiscountAmount(discount);
+            order.setPromoCode(promoCode);
             order.setTotalAmount(totalAmount);
             order.setShippingAddress(shippingAddress);
             order.setContactNumber(contactNumber);
             order.setPaymentMethod(paymentMethod);
+            order.setOrderNotes(orderNotes);
             order.setStatus(Order.STATUS_PENDING);
+            
+            // Set transaction ID for online payments
+            if ("online".equals(paymentMethod) && paymentResult.getTransactionId() != null) {
+                order.setTransactionId(paymentResult.getTransactionId());
+            }
             
             // Convert cart items to order items
             List<OrderItem> orderItems = new ArrayList<>();
@@ -259,11 +303,21 @@ public class CheckoutController extends HttpServlet {
                     itemDAO.updateStock(orderItem.getItemId(), newStock);
                 }
                 
+             // Update promo code usage count if applicable
+                if (promoCode != null && !promoCode.trim().isEmpty()) {
+                    PromoCode promoCodeObj = promoCodeDAO.getPromoCodeByCode(promoCode.trim());
+                    if (promoCodeObj != null) {
+                        promoCodeDAO.incrementUsageCount(promoCodeObj.getId());
+                    }
+                }
+                
                 // Build enhanced success response
                 JsonObject responseObj = new JsonObject();
                 responseObj.addProperty("success", true);
                 responseObj.addProperty("orderId", orderId);
                 responseObj.addProperty("totalAmount", totalAmount);
+                responseObj.addProperty("discount", discount);
+                responseObj.addProperty("promoCode", promoCode);
                 
                 // Return the raw payment method value for frontend processing
                 responseObj.addProperty("paymentMethod", paymentMethod);
@@ -280,6 +334,8 @@ public class CheckoutController extends HttpServlet {
                 
                 System.out.println("CheckoutController: Order placed successfully - ID: " + orderId + 
                                  ", Payment Method: " + paymentMethod + 
+                                 ", Total: " + totalAmount +
+                                 (promoCode != null ? ", Promo: " + promoCode + " (Discount: " + discount + ")" : "") +
                                  (paymentResult.getTransactionId() != null ? ", Transaction: " + paymentResult.getTransactionId() : ""));
                 
             } else {
@@ -443,7 +499,7 @@ public class CheckoutController extends HttpServlet {
     }
     
     /**
-     * Handle get order summary request
+     * Handle get order summary request with promo code support
      */
     private void handleGetOrderSummary(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -479,13 +535,28 @@ public class CheckoutController extends HttpServlet {
             
             BigDecimal shipping = subtotal.compareTo(new BigDecimal("3000")) >= 0 ? 
                                  BigDecimal.ZERO : new BigDecimal("250");
-            BigDecimal total = subtotal.add(shipping);
+            
+            // Check for active promo code in session
+            HttpSession session = request.getSession();
+            String promoCode = (String) session.getAttribute("appliedPromoCode");
+            BigDecimal discount = BigDecimal.ZERO;
+            
+            if (promoCode != null && !promoCode.trim().isEmpty()) {
+                PromoCode promoCodeObj = promoCodeDAO.getPromoCodeByCode(promoCode);
+                if (promoCodeObj != null && promoCodeObj.isValidForOrder(subtotal)) {
+                    discount = promoCodeObj.calculateDiscount(subtotal);
+                }
+            }
+            
+            BigDecimal total = subtotal.add(shipping).subtract(discount);
             
             // Build response
             JsonObject responseObj = new JsonObject();
             responseObj.addProperty("success", true);
             responseObj.addProperty("subtotal", subtotal);
             responseObj.addProperty("shipping", shipping);
+            responseObj.addProperty("discount", discount);
+            responseObj.addProperty("promoCode", promoCode);
             responseObj.addProperty("total", total);
             responseObj.addProperty("itemCount", totalItems);
             responseObj.addProperty("cartItemCount", cartItems.size());
@@ -535,11 +606,11 @@ public class CheckoutController extends HttpServlet {
     
     @Override
     public void destroy() {
-        System.out.println("CheckoutController: Production version being destroyed");
+        System.out.println("CheckoutController: Controller being destroyed");
         orderDAO = null;
         cartDAO = null;
         itemDAO = null;
-        gson = null;
+        promoCodeDAO = null;
         super.destroy();
     }
     

@@ -443,7 +443,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Store checkout data in session
+        // Store promo code data in session storage for checkout page
+        if (promoApplied && currentPromoCode && discount > 0) {
+            sessionStorage.setItem('appliedPromoCode', currentPromoCode);
+            sessionStorage.setItem('promoDiscountAmount', discount.toString());
+            sessionStorage.setItem('promoDiscountType', 'fixed'); // You can enhance this based on actual promo type
+            console.log('📢 Storing promo for checkout:', currentPromoCode, 'Discount:', discount);
+        } else {
+            // Clear any previous promo data if no promo is applied
+            sessionStorage.removeItem('appliedPromoCode');
+            sessionStorage.removeItem('promoDiscountAmount');
+            sessionStorage.removeItem('promoDiscountType');
+        }
+        
+        // Store checkout data
         const checkoutData = {
             items: cartItems,
             subtotal: subtotal,
@@ -453,11 +466,12 @@ document.addEventListener('DOMContentLoaded', () => {
             promoCode: currentPromoCode
         };
         
-        // For demo purposes, show success message
+        // Store complete checkout data
+        sessionStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+        
         showToast('🚀 Redirecting to checkout...', 'info');
         
         setTimeout(() => {
-            // Replace with actual checkout page
             window.location.href = 'checkout.jsp';
         }, 1000);
     }

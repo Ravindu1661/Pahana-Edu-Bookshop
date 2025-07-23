@@ -21,8 +21,8 @@ import com.pahanaedu.dao.OrderDAO;
 import com.pahanaedu.models.Order;
 
 /**
- * Combined Admin Order Management Controller
- * Handles all order-related admin operations: viewing, statistics, and status updates
+ * Enhanced Admin Order Management Controller with Comprehensive Promo Code Support
+ * Handles all order-related admin operations: viewing, statistics, status updates, and promo code tracking
  */
 @WebServlet({"/admin/orders/*", "/admin/order-stats"})
 public class AdminOrderController extends HttpServlet {
@@ -35,7 +35,7 @@ public class AdminOrderController extends HttpServlet {
         try {
             orderDAO = new OrderDAO();
             gson = new Gson();
-            System.out.println("AdminOrderController: Initialized successfully");
+            System.out.println("AdminOrderController: Initialized successfully with promo code support");
         } catch (Exception e) {
             System.err.println("AdminOrderController: Failed to initialize - " + e.getMessage());
             throw new ServletException("Failed to initialize", e);
@@ -54,7 +54,7 @@ public class AdminOrderController extends HttpServlet {
         String servletPath = request.getServletPath();
         String pathInfo = request.getPathInfo();
         
-        System.out.println("DEBUG: ServletPath = " + servletPath + ", PathInfo = " + pathInfo);
+        System.out.println("AdminOrderController: ServletPath = " + servletPath + ", PathInfo = " + pathInfo);
         
         // Handle statistics endpoint
         if ("/admin/order-stats".equals(servletPath)) {
@@ -104,16 +104,20 @@ public class AdminOrderController extends HttpServlet {
      */
     private boolean isAdminAuthorized(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        if (session == null) return false;
+        if (session == null) {
+            System.out.println("AdminOrderController: No session found");
+            return false;
+        }
         
         Boolean isLoggedIn = (Boolean) session.getAttribute("isLoggedIn");
         String userRole = (String) session.getAttribute("userRole");
         
+        System.out.println("AdminOrderController: isLoggedIn=" + isLoggedIn + ", userRole=" + userRole);
         return Boolean.TRUE.equals(isLoggedIn) && "ADMIN".equals(userRole);
     }
 
     /**
-     * Handle get orders with filtering
+     * Handle get orders with filtering and promo code support
      */
     private void handleGetOrders(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -127,10 +131,11 @@ public class AdminOrderController extends HttpServlet {
             String paymentFilter = request.getParameter("payment");
             String dateFilter = request.getParameter("date");
 
-            System.out.println("DEBUG: Filters - Status: " + statusFilter + ", Payment: " + paymentFilter + ", Date: " + dateFilter);
+            System.out.println("AdminOrderController: Filters - Status: " + statusFilter + 
+                             ", Payment: " + paymentFilter + ", Date: " + dateFilter);
 
             List<Order> allOrders = orderDAO.getAllOrders();
-            System.out.println("DEBUG: Total orders from DAO: " + allOrders.size());
+            System.out.println("AdminOrderController: Total orders from DAO: " + allOrders.size());
             
             // Apply filters
             List<Order> filteredOrders = allOrders.stream()
@@ -145,7 +150,13 @@ public class AdminOrderController extends HttpServlet {
                 })
                 .collect(Collectors.toList());
 
-            System.out.println("DEBUG: Filtered orders: " + filteredOrders.size());
+            System.out.println("AdminOrderController: Filtered orders: " + filteredOrders.size());
+
+            // Count orders with promo codes for logging
+            long ordersWithPromo = filteredOrders.stream()
+                .filter(order -> order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty())
+                .count();
+            System.out.println("AdminOrderController: Orders with promo codes: " + ordersWithPromo);
 
             // Build response
             JsonObject responseObj = new JsonObject();
@@ -153,6 +164,7 @@ public class AdminOrderController extends HttpServlet {
             responseObj.addProperty("message", "Orders retrieved successfully");
             responseObj.addProperty("totalCount", allOrders.size());
             responseObj.addProperty("filteredCount", filteredOrders.size());
+            responseObj.addProperty("ordersWithPromo", ordersWithPromo);
 
             JsonArray ordersArray = new JsonArray();
             for (Order order : filteredOrders) {
@@ -163,7 +175,7 @@ public class AdminOrderController extends HttpServlet {
             responseObj.add("orders", ordersArray);
             out.print(responseObj.toString());
 
-            System.out.println("DEBUG: Response sent successfully");
+            System.out.println("AdminOrderController: Response sent successfully");
 
         } catch (Exception e) {
             System.err.println("AdminOrderController: Error retrieving orders - " + e.getMessage());
@@ -175,7 +187,7 @@ public class AdminOrderController extends HttpServlet {
     }
 
     /**
-     * Handle get order statistics
+     * Handle get order statistics with promo code analytics
      */
     private void handleGetOrderStats(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -185,12 +197,12 @@ public class AdminOrderController extends HttpServlet {
         PrintWriter out = response.getWriter();
 
         try {
-            System.out.println("DEBUG: Getting order statistics...");
+            System.out.println("AdminOrderController: Getting order statistics with promo analytics...");
             
             List<Order> allOrders = orderDAO.getAllOrders();
-            System.out.println("DEBUG: Total orders for stats: " + allOrders.size());
+            System.out.println("AdminOrderController: Total orders for stats: " + allOrders.size());
             
-            // Calculate statistics
+            // Calculate basic statistics
             int totalOrders = allOrders.size();
             int pendingOrders = 0;
             int confirmedOrders = 0;
@@ -198,6 +210,11 @@ public class AdminOrderController extends HttpServlet {
             int deliveredOrders = 0;
             int cancelledOrders = 0;
             BigDecimal totalRevenue = BigDecimal.ZERO;
+            
+            // Enhanced statistics for promo codes
+            int ordersWithPromo = 0;
+            BigDecimal totalDiscount = BigDecimal.ZERO;
+            BigDecimal revenueWithoutDiscount = BigDecimal.ZERO;
 
             for (Order order : allOrders) {
                 String status = order.getStatus();
@@ -218,7 +235,7 @@ public class AdminOrderController extends HttpServlet {
                         cancelledOrders++; 
                         break;
                     default:
-                        System.out.println("DEBUG: Unknown status: " + status);
+                        System.out.println("AdminOrderController: Unknown status: " + status);
                         break;
                 }
                 
@@ -227,12 +244,29 @@ public class AdminOrderController extends HttpServlet {
                     BigDecimal amount = order.getTotalAmount();
                     if (amount != null) {
                         totalRevenue = totalRevenue.add(amount);
+                        
+                        // Calculate promo code statistics
+                        if (order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty()) {
+                            ordersWithPromo++;
+                            
+                            // Calculate discount amount
+                            BigDecimal discount = calculateOrderDiscount(order);
+                            if (discount.compareTo(BigDecimal.ZERO) > 0) {
+                                totalDiscount = totalDiscount.add(discount);
+                                revenueWithoutDiscount = revenueWithoutDiscount.add(amount.add(discount));
+                            } else {
+                                revenueWithoutDiscount = revenueWithoutDiscount.add(amount);
+                            }
+                        } else {
+                            revenueWithoutDiscount = revenueWithoutDiscount.add(amount);
+                        }
                     }
                 }
             }
 
-            System.out.println("DEBUG: Stats calculated - Pending: " + pendingOrders + 
-                             ", Confirmed: " + confirmedOrders + ", Revenue: " + totalRevenue);
+            System.out.println("AdminOrderController: Stats calculated - Pending: " + pendingOrders + 
+                             ", Confirmed: " + confirmedOrders + ", Revenue: " + totalRevenue +
+                             ", Orders with promo: " + ordersWithPromo + ", Total discount: " + totalDiscount);
 
             // Build response
             JsonObject responseObj = new JsonObject();
@@ -247,11 +281,20 @@ public class AdminOrderController extends HttpServlet {
             statsObj.addProperty("deliveredOrders", deliveredOrders);
             statsObj.addProperty("cancelledOrders", cancelledOrders);
             statsObj.addProperty("totalRevenue", totalRevenue);
+            
+            // Enhanced promo code statistics
+            statsObj.addProperty("ordersWithPromo", ordersWithPromo);
+            statsObj.addProperty("totalDiscount", totalDiscount);
+            statsObj.addProperty("revenueWithoutDiscount", revenueWithoutDiscount);
+            
+            // Calculate promo usage percentage
+            double promoUsageRate = totalOrders > 0 ? (double) ordersWithPromo / totalOrders * 100 : 0;
+            statsObj.addProperty("promoUsageRate", Math.round(promoUsageRate * 100.0) / 100.0);
 
             responseObj.add("stats", statsObj);
             out.print(responseObj.toString());
 
-            System.out.println("DEBUG: Stats response sent successfully");
+            System.out.println("AdminOrderController: Enhanced stats response sent successfully");
 
         } catch (Exception e) {
             System.err.println("AdminOrderController: Error getting statistics - " + e.getMessage());
@@ -276,7 +319,8 @@ public class AdminOrderController extends HttpServlet {
             String orderIdStr = request.getParameter("orderId");
             String newStatus = request.getParameter("status");
 
-            System.out.println("DEBUG: Update status request - OrderID: " + orderIdStr + ", Status: " + newStatus);
+            System.out.println("AdminOrderController: Update status request - OrderID: " + orderIdStr + 
+                             ", Status: " + newStatus);
 
             // Validation
             if (orderIdStr == null || orderIdStr.trim().isEmpty()) {
@@ -325,9 +369,15 @@ public class AdminOrderController extends HttpServlet {
                 responseObj.addProperty("newStatus", newStatus);
                 responseObj.addProperty("previousStatus", currentOrder.getStatus());
                 
+                // Log promo code information if available
+                if (currentOrder.getPromoCode() != null && !currentOrder.getPromoCode().trim().isEmpty()) {
+                    System.out.println("AdminOrderController: Updated order " + orderId + 
+                                     " with promo code " + currentOrder.getPromoCode());
+                }
+                
                 out.print(responseObj.toString());
                 
-                System.out.println("DEBUG: Order " + orderId + " status updated from " + 
+                System.out.println("AdminOrderController: Order " + orderId + " status updated from " + 
                                  currentOrder.getStatus() + " to " + newStatus);
             } else {
                 sendErrorResponse(response, "Failed to update order status in database");
@@ -343,10 +393,12 @@ public class AdminOrderController extends HttpServlet {
     }
 
     /**
-     * Create JSON object for order
+     * Create comprehensive JSON object for order with full promo code support
      */
     private JsonObject createOrderJsonObject(Order order) {
         JsonObject orderObj = new JsonObject();
+        
+        // Basic order information
         orderObj.addProperty("id", order.getId());
         orderObj.addProperty("userId", order.getUserId());
         orderObj.addProperty("customerName", order.getCustomerName());
@@ -358,7 +410,79 @@ public class AdminOrderController extends HttpServlet {
         orderObj.addProperty("shippingAddress", order.getShippingAddress());
         orderObj.addProperty("createdAt", order.getCreatedAt() != null ? order.getCreatedAt().toString() : null);
         orderObj.addProperty("updatedAt", order.getUpdatedAt() != null ? order.getUpdatedAt().toString() : null);
+        orderObj.addProperty("orderNotes", order.getOrderNotes());
+        
+        // Enhanced pricing information with promo code support
+        if (order.getSubtotal() != null) {
+            orderObj.addProperty("subtotal", order.getSubtotal());
+        }
+        
+        if (order.getShippingAmount() != null) {
+            orderObj.addProperty("shippingAmount", order.getShippingAmount());
+        }
+        
+        if (order.getDiscountAmount() != null) {
+            orderObj.addProperty("discountAmount", order.getDiscountAmount());
+        }
+        
+        // Promo code information
+        if (order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty()) {
+            orderObj.addProperty("promoCode", order.getPromoCode());
+            System.out.println("AdminOrderController: Order " + order.getId() + " has promo code: " + order.getPromoCode());
+        }
+        
+        // Transaction ID for online payments
+        if (order.getTransactionId() != null && !order.getTransactionId().trim().isEmpty()) {
+            orderObj.addProperty("transactionId", order.getTransactionId());
+        }
+        
+        // Calculate breakdown for admin dashboard compatibility
+        BigDecimal subtotal = order.getSubtotal() != null ? order.getSubtotal() : BigDecimal.ZERO;
+        BigDecimal shipping = order.getShippingAmount() != null ? order.getShippingAmount() : BigDecimal.ZERO;
+        BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        
+        // If we don't have breakdown data, calculate from order items
+        if (subtotal.equals(BigDecimal.ZERO) && order.getOrderItems() != null) {
+            subtotal = order.getOrderItems().stream()
+                .map(item -> item.getPrice().multiply(new BigDecimal(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            // Apply free shipping rule
+            shipping = subtotal.compareTo(new BigDecimal("3000")) >= 0 ? BigDecimal.ZERO : new BigDecimal("250");
+            
+            // Calculate discount if total amount is available
+            if (order.getTotalAmount() != null) {
+                BigDecimal expectedTotal = subtotal.add(shipping);
+                discount = expectedTotal.subtract(order.getTotalAmount());
+                if (discount.compareTo(BigDecimal.ZERO) < 0) {
+                    discount = BigDecimal.ZERO;
+                }
+            }
+        }
+        
+        // Add calculated values for admin dashboard
+        orderObj.addProperty("calculatedSubtotal", subtotal);
+        orderObj.addProperty("calculatedShipping", shipping);
+        orderObj.addProperty("calculatedDiscount", discount);
+        
+        // Add promo code savings information for admin dashboard
+        if (discount.compareTo(BigDecimal.ZERO) > 0 && order.getPromoCode() != null) {
+            orderObj.addProperty("promoSavings", discount);
+            orderObj.addProperty("hasPromoDiscount", true);
+        } else {
+            orderObj.addProperty("hasPromoDiscount", false);
+        }
+        
+        // Add payment status information
+        if ("online".equals(order.getPaymentMethod())) {
+            orderObj.addProperty("isOnlinePayment", true);
+            orderObj.addProperty("paymentStatus", order.getTransactionId() != null ? "completed" : "pending");
+        } else {
+            orderObj.addProperty("isOnlinePayment", false);
+            orderObj.addProperty("paymentStatus", "cod");
+        }
 
+        // Enhanced order items with totals
         JsonArray itemsArray = new JsonArray();
         if (order.getOrderItems() != null) {
             order.getOrderItems().forEach(item -> {
@@ -370,12 +494,49 @@ public class AdminOrderController extends HttpServlet {
                 itemObj.addProperty("itemImagePath", item.getItemImagePath());
                 itemObj.addProperty("quantity", item.getQuantity());
                 itemObj.addProperty("price", item.getPrice());
+                
+                // Calculate item total for admin dashboard
+                BigDecimal itemTotal = item.getPrice().multiply(new BigDecimal(item.getQuantity()));
+                itemObj.addProperty("itemTotal", itemTotal);
+                
                 itemsArray.add(itemObj);
             });
         }
         orderObj.add("orderItems", itemsArray);
+        
+        // Add summary information for admin dashboard
+        orderObj.addProperty("itemCount", order.getOrderItems() != null ? order.getOrderItems().size() : 0);
+        int totalQuantity = order.getOrderItems() != null ? 
+            order.getOrderItems().stream().mapToInt(item -> item.getQuantity()).sum() : 0;
+        orderObj.addProperty("totalQuantity", totalQuantity);
 
         return orderObj;
+    }
+
+    /**
+     * Calculate discount amount for an order
+     */
+    private BigDecimal calculateOrderDiscount(Order order) {
+        if (order.getDiscountAmount() != null) {
+            return order.getDiscountAmount();
+        }
+        
+        // Calculate discount if not stored directly
+        if (order.getOrderItems() != null && order.getTotalAmount() != null) {
+            BigDecimal subtotal = order.getOrderItems().stream()
+                .map(item -> item.getPrice().multiply(new BigDecimal(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal shipping = subtotal.compareTo(new BigDecimal("3000")) >= 0 ? 
+                                 BigDecimal.ZERO : new BigDecimal("250");
+            
+            BigDecimal expectedTotal = subtotal.add(shipping);
+            BigDecimal discount = expectedTotal.subtract(order.getTotalAmount());
+            
+            return discount.compareTo(BigDecimal.ZERO) > 0 ? discount : BigDecimal.ZERO;
+        }
+        
+        return BigDecimal.ZERO;
     }
 
     /**
@@ -424,7 +585,7 @@ public class AdminOrderController extends HttpServlet {
         if (!Order.STATUS_PENDING.equals(currentStatus) && Order.STATUS_PENDING.equals(newStatus)) 
             return false;
             
-        // Cannot skip steps
+        // Cannot skip steps (with some flexibility for admin)
         if (Order.STATUS_PENDING.equals(currentStatus) && Order.STATUS_SHIPPED.equals(newStatus)) 
             return false;
         if ((Order.STATUS_PENDING.equals(currentStatus) || Order.STATUS_CONFIRMED.equals(currentStatus)) 
@@ -466,7 +627,7 @@ public class AdminOrderController extends HttpServlet {
         out.print(responseObj.toString());
         out.flush();
         
-        System.err.println("DEBUG: Error response sent - " + message);
+        System.err.println("AdminOrderController: Error response sent - " + message);
     }
 
     @Override

@@ -14,14 +14,15 @@ import com.pahanaedu.models.OrderItem;
 import com.pahanaedu.utils.DatabaseConnection;
 
 /**
- * Data Access Object for Order operations - Updated for final database structure
+ * Data Access Object for Order operations - Enhanced with promo code support
  */
 public class OrderDAO {
     
-    // SQL Queries - Updated to match your exact database structure
+    // SQL Queries - Updated with new fields
     private static final String INSERT_ORDER = 
-        "INSERT INTO orders (user_id, total_amount, status, shipping_address, contact_number, payment_method) " +
-        "VALUES (?, ?, ?, ?, ?, ?)";
+        "INSERT INTO orders (user_id, total_amount, subtotal, shipping_amount, discount_amount, " +
+        "promo_code, status, shipping_address, contact_number, payment_method, transaction_id, order_notes) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     private static final String INSERT_ORDER_ITEM = 
         "INSERT INTO order_items (order_id, item_id, quantity, price) " +
@@ -65,6 +66,9 @@ public class OrderDAO {
     private static final String UPDATE_ORDER_STATUS = 
         "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
     
+    private static final String UPDATE_PAYMENT_STATUS = 
+        "UPDATE orders SET payment_status = ?, transaction_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    
     private static final String COUNT_ORDERS_BY_STATUS = 
         "SELECT COUNT(*) FROM orders WHERE status = ?";
     
@@ -72,7 +76,7 @@ public class OrderDAO {
         "SELECT COUNT(*) FROM orders WHERE user_id = ?";
     
     /**
-     * Create new order with order items
+     * Create new order with order items - Enhanced with promo support
      */
     public int createOrder(Order order) {
         Connection connection = null;
@@ -83,14 +87,38 @@ public class OrderDAO {
             connection = DatabaseConnection.getConnection();
             connection.setAutoCommit(false); // Start transaction
             
-            // Insert order
+            // Insert order with all new fields
             orderStatement = connection.prepareStatement(INSERT_ORDER, Statement.RETURN_GENERATED_KEYS);
             orderStatement.setInt(1, order.getUserId());
             orderStatement.setBigDecimal(2, order.getTotalAmount());
-            orderStatement.setString(3, order.getStatus());
-            orderStatement.setString(4, order.getShippingAddress());
-            orderStatement.setString(5, order.getContactNumber());
-            orderStatement.setString(6, order.getPaymentMethod() != null ? order.getPaymentMethod() : "cod");
+            
+            // New fields - handle null values properly
+            orderStatement.setBigDecimal(3, order.getSubtotal() != null ? order.getSubtotal() : order.getTotalAmount());
+            orderStatement.setBigDecimal(4, order.getShippingAmount() != null ? order.getShippingAmount() : BigDecimal.ZERO);
+            orderStatement.setBigDecimal(5, order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO);
+            
+            if (order.getPromoCode() != null && !order.getPromoCode().trim().isEmpty()) {
+                orderStatement.setString(6, order.getPromoCode());
+            } else {
+                orderStatement.setNull(6, java.sql.Types.VARCHAR);
+            }
+            
+            orderStatement.setString(7, order.getStatus());
+            orderStatement.setString(8, order.getShippingAddress());
+            orderStatement.setString(9, order.getContactNumber());
+            orderStatement.setString(10, order.getPaymentMethod() != null ? order.getPaymentMethod() : "cod");
+            
+            if (order.getTransactionId() != null && !order.getTransactionId().trim().isEmpty()) {
+                orderStatement.setString(11, order.getTransactionId());
+            } else {
+                orderStatement.setNull(11, java.sql.Types.VARCHAR);
+            }
+            
+            if (order.getOrderNotes() != null && !order.getOrderNotes().trim().isEmpty()) {
+                orderStatement.setString(12, order.getOrderNotes());
+            } else {
+                orderStatement.setNull(12, java.sql.Types.LONGVARCHAR);
+            }
             
             int rowsAffected = orderStatement.executeUpdate();
             
@@ -114,7 +142,9 @@ public class OrderDAO {
                     itemStatement.executeBatch();
                     
                     connection.commit(); // Commit transaction
-                    System.out.println("OrderDAO: Order created successfully - ID: " + orderId);
+                    System.out.println("OrderDAO: Order created successfully - ID: " + orderId + 
+                                     (order.getPromoCode() != null ? ", Promo: " + order.getPromoCode() : "") +
+                                     (order.getDiscountAmount() != null ? ", Discount: " + order.getDiscountAmount() : ""));
                     return orderId;
                 }
             }
@@ -285,6 +315,40 @@ public class OrderDAO {
     }
     
     /**
+     * Update payment status with transaction ID
+     */
+    public boolean updatePaymentStatus(int orderId, String paymentStatus, String transactionId) {
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_PAYMENT_STATUS)) {
+            
+            statement.setString(1, paymentStatus);
+            
+            if (transactionId != null && !transactionId.trim().isEmpty()) {
+                statement.setString(2, transactionId);
+            } else {
+                statement.setNull(2, java.sql.Types.VARCHAR);
+            }
+            
+            statement.setInt(3, orderId);
+            
+            int rowsAffected = statement.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                System.out.println("OrderDAO: Payment status updated - ID: " + orderId + 
+                                 ", Status: " + paymentStatus + 
+                                 (transactionId != null ? ", Transaction: " + transactionId : ""));
+                return true;
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("OrderDAO: Error updating payment status - " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
      * Check if order belongs to user
      */
     public boolean isOrderOwnedByUser(int orderId, int userId) {
@@ -354,13 +418,27 @@ public class OrderDAO {
     }
     
     /**
-     * Extract Order object from ResultSet - Updated for your database structure
+     * Extract Order object from ResultSet - Enhanced with new fields
      */
     private Order extractOrderFromResultSet(ResultSet resultSet) throws SQLException {
         Order order = new Order();
         order.setId(resultSet.getInt("id"));
         order.setUserId(resultSet.getInt("user_id"));
         order.setTotalAmount(resultSet.getBigDecimal("total_amount"));
+        
+        // Extract new fields safely
+        try {
+            order.setSubtotal(resultSet.getBigDecimal("subtotal"));
+            order.setShippingAmount(resultSet.getBigDecimal("shipping_amount"));
+            order.setDiscountAmount(resultSet.getBigDecimal("discount_amount"));
+            order.setPromoCode(resultSet.getString("promo_code"));
+            order.setTransactionId(resultSet.getString("transaction_id"));
+            order.setOrderNotes(resultSet.getString("order_notes"));
+        } catch (SQLException e) {
+            // If columns don't exist (older orders), continue without them
+            System.out.println("OrderDAO: Some new columns not found, using defaults");
+        }
+        
         order.setStatus(resultSet.getString("status"));
         order.setShippingAddress(resultSet.getString("shipping_address"));
         order.setContactNumber(resultSet.getString("contact_number"));

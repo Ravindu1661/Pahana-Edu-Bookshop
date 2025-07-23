@@ -112,10 +112,11 @@ if (session.getAttribute("user") == null ||
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Close</button>
                 <button class="btn btn-primary" onclick="printOrderDetails()">Print Order</button>
-                <button class="btn btn-success" onclick="downloadReceipt()">Download Receipt</button>
             </div>
         </div>
     </div>
+
+    <!-- Order Tracking Modal will be dynamically inserted here -->
 
     <!-- Loading Spinner -->
     <div class="loading-spinner" id="loadingSpinner">
