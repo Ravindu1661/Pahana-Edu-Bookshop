@@ -1,4 +1,4 @@
-// 🚀 Pahana Edu Manager Dashboard - Main JavaScript File
+// 🚀 Pahana Edu Manager Dashboard - Main JavaScript File - FIXED VERSION
 // This file contains all functionality for User Management, Item Management, and Order Management
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * Delete user
+     * Delete user - FIXED METHOD
      */
     function deleteUser() {
         console.log('🗑️ Deleting user:', currentDeleteUser);
@@ -808,7 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // ==========================================
-    // ORDER MANAGEMENT FUNCTIONS
+    // ORDER MANAGEMENT FUNCTIONS - FIXED
     // ==========================================
     
     /**
@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * View order details
+     * View order details - FIXED VERSION
      */
     function viewOrderDetails(orderId) {
         console.log('👁️ Viewing order details:', orderId);
@@ -955,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Create order details modal HTML
+        // Create order details modal HTML with proper data display
         const modalHtml = `
             <div class="modal fade" id="orderDetailsModal" tabindex="-1">
                 <div class="modal-dialog modal-lg">
@@ -999,7 +999,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            ${order.orderItems ? order.orderItems.map(item => `
+                                            ${order.orderItems && order.orderItems.length > 0 ? order.orderItems.map(item => `
                                                 <tr>
                                                     <td>
                                                         <div class="d-flex align-items-center">
@@ -1018,7 +1018,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                     <td>${item.quantity || 0}</td>
                                                     <td>Rs. ${(parseFloat(item.price || 0) * parseInt(item.quantity || 0)).toFixed(2)}</td>
                                                 </tr>
-                                            `).join('') : '<tr><td colspan="4">No items found</td></tr>'}
+                                            `).join('') : '<tr><td colspan="4" class="text-center">No items found</td></tr>'}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1164,6 +1164,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Make functions globally accessible
     window.showSection = showSection;
+    window.loadDashboardStats = loadDashboardStats;
+    window.loadUsers = loadUsers;
+    window.loadItems = loadItems;
+    window.loadOrders = loadOrders;
     window.showCreateUserModal = showCreateUserModal;
     window.editUser = editUser;
     window.saveUser = saveUser;
@@ -1223,6 +1227,11 @@ document.addEventListener('DOMContentLoaded', () => {
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+        
+        .status-active { background-color: #d4edda; color: #155724; }
+        .status-inactive { background-color: #f8d7da; color: #721c24; }
+        .status-pending { background-color: #fff3cd; color: #856404; }
+        .status-confirmed { background-color: #cce5ff; color: #004085; }
         
         /* Custom Alert Positioning */
         .custom-alert {

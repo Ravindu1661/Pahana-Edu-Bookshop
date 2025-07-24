@@ -117,6 +117,9 @@ public class ManagerController extends HttpServlet {
             case "/update-user":
                 handleUpdateUser(request, response);
                 break;
+            case "/delete-user":  // ADD MISSING DELETE USER ENDPOINT
+                handleDeleteUser(request, response);
+                break;
             // Item operations
             case "/create-item":
                 handleCreateItem(request, response);
@@ -399,7 +402,7 @@ public class ManagerController extends HttpServlet {
         try {
             List<Order> orders = orderDAO.getAllOrders();
             
-            // Convert to JSON (simplified)
+            // Convert to JSON with complete order information
             StringBuilder jsonBuilder = new StringBuilder();
             jsonBuilder.append("{\"success\": true, \"orders\": [");
             
@@ -414,8 +417,30 @@ public class ManagerController extends HttpServlet {
                     .append("\"totalAmount\": ").append(order.getTotalAmount()).append(",")
                     .append("\"status\": \"").append(escapeJsonString(order.getStatus())).append("\",")
                     .append("\"paymentMethod\": \"").append(escapeJsonString(order.getPaymentMethod())).append("\",")
-                    .append("\"createdAt\": \"").append(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "").append("\"")
-                    .append("}");
+                    .append("\"contactNumber\": \"").append(escapeJsonString(order.getContactNumber())).append("\",")
+                    .append("\"shippingAddress\": \"").append(escapeJsonString(order.getShippingAddress())).append("\",")
+                    .append("\"createdAt\": \"").append(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "").append("\",");
+                
+                // Add order items as JSON array
+                jsonBuilder.append("\"orderItems\": [");
+                if (order.getOrderItems() != null) {
+                    for (int j = 0; j < order.getOrderItems().size(); j++) {
+                        var item = order.getOrderItems().get(j);
+                        if (j > 0) jsonBuilder.append(",");
+                        
+                        jsonBuilder.append("{")
+                            .append("\"itemId\": ").append(item.getItemId()).append(",")
+                            .append("\"itemTitle\": \"").append(escapeJsonString(item.getItemTitle())).append("\",")
+                            .append("\"itemAuthor\": \"").append(escapeJsonString(item.getItemAuthor())).append("\",")
+                            .append("\"itemImagePath\": \"").append(escapeJsonString(item.getItemImagePath())).append("\",")
+                            .append("\"quantity\": ").append(item.getQuantity()).append(",")
+                            .append("\"price\": ").append(item.getPrice())
+                            .append("}");
+                    }
+                }
+                jsonBuilder.append("]");
+                
+                jsonBuilder.append("}");
             }
             
             jsonBuilder.append("]}");
@@ -665,7 +690,56 @@ public class ManagerController extends HttpServlet {
     }
     
     /**
-     * Handle create item request
+     * Handle delete user request - FIXED MISSING METHOD
+     */
+    private void handleDeleteUser(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String userIdStr = request.getParameter("userId");
+            
+            if (userIdStr == null || userIdStr.trim().isEmpty()) {
+                sendErrorResponse(response, "User ID is required");
+                return;
+            }
+            
+            int userId = Integer.parseInt(userIdStr);
+            
+            User existingUser = userDAO.getUserById(userId);
+            if (existingUser == null) {
+                sendErrorResponse(response, "User not found");
+                return;
+            }
+            
+            // Managers cannot delete admin users
+            if (User.ROLE_ADMIN.equals(existingUser.getRole())) {
+                sendErrorResponse(response, "Cannot delete admin users");
+                return;
+            }
+            
+            if (userDAO.deleteUser(userId)) {
+                sendSuccessResponse(response, "User deleted successfully");
+            } else {
+                sendErrorResponse(response, "Failed to delete user");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid user ID");
+        } catch (Exception e) {
+            System.err.println("ManagerController: Error deleting user - " + e.getMessage());
+            sendErrorResponse(response, "Error deleting user");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle create item request - FIXED REFERENCE NUMBER GENERATION
      */
     private void handleCreateItem(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
@@ -710,6 +784,10 @@ public class ManagerController extends HttpServlet {
             newItem.setDescription(description != null ? description.trim() : "");
             newItem.setImagePath(imagePath != null ? imagePath.trim() : "");
             newItem.setStatus(status != null && !status.trim().isEmpty() ? status.trim() : Item.STATUS_ACTIVE);
+            
+            // Generate unique reference number using timestamp-based approach to avoid conflicts
+            String uniqueRef = "REF-" + System.currentTimeMillis();
+            newItem.setReferenceNo(uniqueRef);
             
             if (itemDAO.createItem(newItem)) {
                 sendSuccessResponse(response, "Item created successfully");
