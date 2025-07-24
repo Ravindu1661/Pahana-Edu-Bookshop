@@ -2,6 +2,8 @@ package com.pahanaedu.controllers;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.servlet.ServletException;
@@ -11,7 +13,15 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
-import com.pahanaedu.dao.UserDAO;
+import com.pahanaedu.dao.CashierOrderDAO;
+import com.pahanaedu.dao.ItemDAO;
+import com.pahanaedu.dao.OrderDAO;
+import com.pahanaedu.dao.PromoCodeDAO;
+import com.pahanaedu.models.CashierOrder;
+import com.pahanaedu.models.CashierOrderItem;
+import com.pahanaedu.models.Item;
+import com.pahanaedu.models.Order;
+import com.pahanaedu.models.PromoCode;
 import com.pahanaedu.models.User;
 
 /**
@@ -22,16 +32,22 @@ import com.pahanaedu.models.User;
 public class CashierController extends HttpServlet {
     private static final long serialVersionUID = 1L;
     
-    private UserDAO userDAO;
+    private CashierOrderDAO cashierOrderDAO;
+    private ItemDAO itemDAO;
+    private OrderDAO orderDAO;
+    private PromoCodeDAO promoCodeDAO;
     
     @Override
     public void init() throws ServletException {
         try {
-            userDAO = new UserDAO();
-            System.out.println("CashierController: UserDAO initialized successfully");
+            cashierOrderDAO = new CashierOrderDAO();
+            itemDAO = new ItemDAO();
+            orderDAO = new OrderDAO();
+            promoCodeDAO = new PromoCodeDAO();
+            System.out.println("CashierController: All DAOs initialized successfully");
         } catch (Exception e) {
-            System.err.println("CashierController: Failed to initialize UserDAO - " + e.getMessage());
-            throw new ServletException("Failed to initialize UserDAO", e);
+            System.err.println("CashierController: Failed to initialize DAOs - " + e.getMessage());
+            throw new ServletException("Failed to initialize DAOs", e);
         }
     }
     
@@ -48,17 +64,22 @@ public class CashierController extends HttpServlet {
         String pathInfo = request.getPathInfo();
         
         if (pathInfo == null || pathInfo.equals("/")) {
-            // Redirect to cashier dashboard
             response.sendRedirect("cashier-dashboard.jsp");
             return;
         }
         
         switch (pathInfo) {
-            case "/customers":
-                handleGetCustomers(request, response);
+            case "/items":
+                handleGetItems(request, response);
                 break;
-            case "/sales":
-                handleGetSales(request, response);
+            case "/search-items":
+                handleSearchItems(request, response);
+                break;
+            case "/customer-orders":
+                handleGetCustomerOrders(request, response);
+                break;
+            case "/cashier-orders":
+                handleGetCashierOrders(request, response);
                 break;
             case "/stats":
                 handleGetStats(request, response);
@@ -86,11 +107,17 @@ public class CashierController extends HttpServlet {
         }
         
         switch (pathInfo) {
-            case "/process-sale":
-                handleProcessSale(request, response);
+            case "/create-order":
+                handleCreateOrder(request, response);
                 break;
-            case "/search-customer":
-                handleSearchCustomer(request, response);
+            case "/validate-promo":
+                handleValidatePromo(request, response);
+                break;
+            case "/print-order":
+                handlePrintOrder(request, response);
+                break;
+            case "/update-order-status":
+                handleUpdateOrderStatus(request, response);
                 break;
             default:
                 sendErrorResponse(response, "Invalid operation");
@@ -114,9 +141,29 @@ public class CashierController extends HttpServlet {
     }
     
     /**
-     * Handle get customers request
+     * Get current cashier ID
      */
-    private void handleGetCustomers(HttpServletRequest request, HttpServletResponse response) 
+    private int getCurrentCashierId(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            Object userObj = session.getAttribute("user");
+            if (userObj != null) {
+                try {
+                    java.lang.reflect.Method getIdMethod = userObj.getClass().getMethod("getId");
+                    Integer userId = (Integer) getIdMethod.invoke(userObj);
+                    return userId != null ? userId : 1;
+                } catch (Exception e) {
+                    System.err.println("Error getting cashier ID: " + e.getMessage());
+                }
+            }
+        }
+        return 1; // Default fallback
+    }
+    
+    /**
+     * Handle get items request
+     */
+    private void handleGetItems(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -125,43 +172,43 @@ public class CashierController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            List<User> customers = userDAO.getUsersByRole(User.ROLE_CUSTOMER);
+            List<Item> items = itemDAO.getActiveItems();
             
             // Convert to JSON
             StringBuilder jsonBuilder = new StringBuilder();
-            jsonBuilder.append("{\"success\": true, \"customers\": [");
+            jsonBuilder.append("{\"success\": true, \"items\": [");
             
-            for (int i = 0; i < customers.size(); i++) {
-                User customer = customers.get(i);
+            for (int i = 0; i < items.size(); i++) {
+                Item item = items.get(i);
                 if (i > 0) jsonBuilder.append(",");
                 
                 jsonBuilder.append("{")
-                    .append("\"id\": ").append(customer.getId()).append(",")
-                    .append("\"firstName\": \"").append(escapeJsonString(customer.getFirstName())).append("\",")
-                    .append("\"lastName\": \"").append(escapeJsonString(customer.getLastName())).append("\",")
-                    .append("\"email\": \"").append(escapeJsonString(customer.getEmail())).append("\",")
-                    .append("\"phone\": \"").append(escapeJsonString(customer.getPhone())).append("\",")
-                    .append("\"status\": \"").append(escapeJsonString(customer.getStatus())).append("\",")
-                    .append("\"fullName\": \"").append(escapeJsonString(customer.getFullName())).append("\"")
+                    .append("\"id\": ").append(item.getId()).append(",")
+                    .append("\"title\": \"").append(escapeJsonString(item.getTitle())).append("\",")
+                    .append("\"author\": \"").append(escapeJsonString(item.getAuthor())).append("\",")
+                    .append("\"categoryName\": \"").append(escapeJsonString(item.getCategoryName())).append("\",")
+                    .append("\"price\": ").append(item.getPrice()).append(",")
+                    .append("\"offerPrice\": ").append(item.getOfferPrice() != null ? item.getOfferPrice() : "null").append(",")
+                    .append("\"stock\": ").append(item.getStock()).append(",")
+                    .append("\"imagePath\": \"").append(escapeJsonString(item.getImagePath())).append("\"")
                     .append("}");
             }
             
             jsonBuilder.append("]}");
-            
             out.print(jsonBuilder.toString());
             
         } catch (Exception e) {
-            System.err.println("CashierController: Error getting customers - " + e.getMessage());
-            out.print("{\"success\": false, \"message\": \"Error retrieving customers\"}");
+            System.err.println("CashierController: Error getting items - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving items\"}");
         } finally {
             out.close();
         }
     }
     
     /**
-     * Handle get sales request
+     * Handle search items request
      */
-    private void handleGetSales(HttpServletRequest request, HttpServletResponse response) 
+    private void handleSearchItems(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -170,18 +217,134 @@ public class CashierController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            // This would be implemented with actual sales data
-            // For now, return dummy data
-            String jsonResponse = "{\"success\": true, \"sales\": [" +
-                "{\"id\": 1, \"customer\": \"John Doe\", \"amount\": 250.00, \"date\": \"2024-01-15\"}," +
-                "{\"id\": 2, \"customer\": \"Jane Smith\", \"amount\": 180.50, \"date\": \"2024-01-15\"}" +
-                "]}";
+            String searchQuery = request.getParameter("query");
+            if (searchQuery == null || searchQuery.trim().isEmpty()) {
+                out.print("{\"success\": false, \"message\": \"Search query is required\"}");
+                return;
+            }
             
-            out.print(jsonResponse);
+            List<Item> items = itemDAO.searchItems(searchQuery.trim());
+            
+            // Convert to JSON (same format as get items)
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{\"success\": true, \"items\": [");
+            
+            for (int i = 0; i < items.size(); i++) {
+                Item item = items.get(i);
+                if (i > 0) jsonBuilder.append(",");
+                
+                jsonBuilder.append("{")
+                    .append("\"id\": ").append(item.getId()).append(",")
+                    .append("\"title\": \"").append(escapeJsonString(item.getTitle())).append("\",")
+                    .append("\"author\": \"").append(escapeJsonString(item.getAuthor())).append("\",")
+                    .append("\"categoryName\": \"").append(escapeJsonString(item.getCategoryName())).append("\",")
+                    .append("\"price\": ").append(item.getPrice()).append(",")
+                    .append("\"offerPrice\": ").append(item.getOfferPrice() != null ? item.getOfferPrice() : "null").append(",")
+                    .append("\"stock\": ").append(item.getStock()).append(",")
+                    .append("\"imagePath\": \"").append(escapeJsonString(item.getImagePath())).append("\"")
+                    .append("}");
+            }
+            
+            jsonBuilder.append("]}");
+            out.print(jsonBuilder.toString());
             
         } catch (Exception e) {
-            System.err.println("CashierController: Error getting sales - " + e.getMessage());
-            out.print("{\"success\": false, \"message\": \"Error retrieving sales\"}");
+            System.err.println("CashierController: Error searching items - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error searching items\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle get customer orders request
+     */
+    private void handleGetCustomerOrders(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            List<Order> orders = orderDAO.getAllOrders();
+            
+            // Convert to JSON
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{\"success\": true, \"orders\": [");
+            
+            for (int i = 0; i < orders.size(); i++) {
+                Order order = orders.get(i);
+                if (i > 0) jsonBuilder.append(",");
+                
+                jsonBuilder.append("{")
+                    .append("\"id\": ").append(order.getId()).append(",")
+                    .append("\"customerName\": \"").append(escapeJsonString(order.getCustomerName())).append("\",")
+                    .append("\"customerEmail\": \"").append(escapeJsonString(order.getCustomerEmail())).append("\",")
+                    .append("\"contactNumber\": \"").append(escapeJsonString(order.getContactNumber())).append("\",")
+                    .append("\"totalAmount\": ").append(order.getTotalAmount()).append(",")
+                    .append("\"status\": \"").append(escapeJsonString(order.getStatus())).append("\",")
+                    .append("\"paymentMethod\": \"").append(escapeJsonString(order.getPaymentMethod())).append("\",")
+                    .append("\"createdAt\": \"").append(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "").append("\"")
+                    .append("}");
+            }
+            
+            jsonBuilder.append("]}");
+            out.print(jsonBuilder.toString());
+            
+        } catch (Exception e) {
+            System.err.println("CashierController: Error getting customer orders - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving customer orders\"}");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle get cashier orders request
+     */
+    private void handleGetCashierOrders(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            int cashierId = getCurrentCashierId(request);
+            List<CashierOrder> orders = cashierOrderDAO.getOrdersByCashier(cashierId);
+            
+            // Convert to JSON
+            StringBuilder jsonBuilder = new StringBuilder();
+            jsonBuilder.append("{\"success\": true, \"orders\": [");
+            
+            for (int i = 0; i < orders.size(); i++) {
+                CashierOrder order = orders.get(i);
+                if (i > 0) jsonBuilder.append(",");
+                
+                jsonBuilder.append("{")
+                    .append("\"id\": ").append(order.getId()).append(",")
+                    .append("\"customerName\": \"").append(escapeJsonString(order.getCustomerName())).append("\",")
+                    .append("\"customerPhone\": \"").append(escapeJsonString(order.getCustomerPhone())).append("\",")
+                    .append("\"customerEmail\": \"").append(escapeJsonString(order.getCustomerEmail())).append("\",")
+                    .append("\"totalAmount\": ").append(order.getTotalAmount()).append(",")
+                    .append("\"discountAmount\": ").append(order.getDiscountAmount() != null ? order.getDiscountAmount() : 0).append(",")
+                    .append("\"promoCode\": \"").append(escapeJsonString(order.getPromoCode())).append("\",")
+                    .append("\"status\": \"").append(escapeJsonString(order.getStatus())).append("\",")
+                    .append("\"paymentMethod\": \"").append(escapeJsonString(order.getPaymentMethod())).append("\",")
+                    .append("\"orderType\": \"").append(escapeJsonString(order.getOrderType())).append("\",")
+                    .append("\"createdAt\": \"").append(order.getCreatedAt() != null ? order.getCreatedAt().toString() : "").append("\"")
+                    .append("}");
+            }
+            
+            jsonBuilder.append("]}");
+            out.print(jsonBuilder.toString());
+            
+        } catch (Exception e) {
+            System.err.println("CashierController: Error getting cashier orders - " + e.getMessage());
+            out.print("{\"success\": false, \"message\": \"Error retrieving cashier orders\"}");
         } finally {
             out.close();
         }
@@ -199,17 +362,25 @@ public class CashierController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            int totalCustomers = userDAO.getUserCountByRole(User.ROLE_CUSTOMER);
+            int cashierId = getCurrentCashierId(request);
             
-            // Dummy statistics - in real application, get from sales/orders table
+            // Get cashier-specific stats
+            int todayOrders = cashierOrderDAO.getTodayOrdersCount(cashierId);
+            BigDecimal todayRevenue = cashierOrderDAO.getTodayRevenue(cashierId);
+            int totalOrders = cashierOrderDAO.getTotalOrdersCount(cashierId);
+            
+            // Get general stats
+            int totalItems = itemDAO.countItemsByStatus("active");
+            
             String jsonResponse = String.format(
                 "{\"success\": true, \"stats\": {" +
-                "\"totalCustomers\": %d, " +
-                "\"todaySales\": 15, " +
-                "\"todayRevenue\": 2500.00, " +
-                "\"pendingOrders\": 5" +
+                "\"todayOrders\": %d, " +
+                "\"todayRevenue\": %s, " +
+                "\"totalOrders\": %d, " +
+                "\"totalItems\": %d" +
                 "}}",
-                totalCustomers
+                todayOrders, todayRevenue != null ? todayRevenue : BigDecimal.ZERO, 
+                totalOrders, totalItems
             );
             
             out.print(jsonResponse);
@@ -223,9 +394,9 @@ public class CashierController extends HttpServlet {
     }
     
     /**
-     * Handle process sale request
+     * Handle create order request
      */
-    private void handleProcessSale(HttpServletRequest request, HttpServletResponse response) 
+    private void handleCreateOrder(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -234,41 +405,88 @@ public class CashierController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            // Get sale parameters
-            String customerId = request.getParameter("customerId");
-            String amount = request.getParameter("amount");
-            String items = request.getParameter("items");
+            int cashierId = getCurrentCashierId(request);
             
-            // Validate inputs
-            if (customerId == null || customerId.trim().isEmpty()) {
-                sendErrorResponse(response, "Customer ID is required");
+            // Get order details
+            String customerName = request.getParameter("customerName");
+            String customerPhone = request.getParameter("customerPhone");
+            String customerEmail = request.getParameter("customerEmail");
+            String orderType = request.getParameter("orderType");
+            String paymentMethod = request.getParameter("paymentMethod");
+            String promoCode = request.getParameter("promoCode");
+            String notes = request.getParameter("notes");
+            String itemsJson = request.getParameter("items");
+            
+            // Validation
+            if (customerName == null || customerName.trim().isEmpty()) {
+                sendErrorResponse(response, "Customer name is required");
                 return;
             }
             
-            if (amount == null || amount.trim().isEmpty()) {
-                sendErrorResponse(response, "Amount is required");
+            if (itemsJson == null || itemsJson.trim().isEmpty()) {
+                sendErrorResponse(response, "Order items are required");
                 return;
             }
             
-            // This would be implemented with actual sales processing
-            // For now, return success
-            System.out.println("CashierController: Processing sale - Customer: " + customerId + 
-                             ", Amount: " + amount + ", Items: " + items);
+            // Parse items (simple JSON parsing)
+            List<CashierOrderItem> orderItems = parseOrderItems(itemsJson);
+            if (orderItems.isEmpty()) {
+                sendErrorResponse(response, "Invalid order items");
+                return;
+            }
             
-            sendSuccessResponse(response, "Sale processed successfully");
+            // Calculate totals
+            BigDecimal subtotal = BigDecimal.ZERO;
+            for (CashierOrderItem item : orderItems) {
+                subtotal = subtotal.add(item.getTotalPrice());
+            }
+            
+            BigDecimal discountAmount = BigDecimal.ZERO;
+            
+            // Apply promo code if provided
+            if (promoCode != null && !promoCode.trim().isEmpty()) {
+                PromoCode promo = promoCodeDAO.getPromoCodeByCode(promoCode.trim());
+                if (promo != null && promo.isValidForOrder(subtotal)) {
+                    discountAmount = promo.calculateDiscount(subtotal);
+                    promoCodeDAO.incrementUsageCount(promo.getId());
+                }
+            }
+            
+            BigDecimal totalAmount = subtotal.subtract(discountAmount);
+            
+            // Create order
+            CashierOrder order = new CashierOrder();
+            order.setCashierId(cashierId);
+            order.setCustomerName(customerName.trim());
+            order.setCustomerPhone(customerPhone != null ? customerPhone.trim() : null);
+            order.setCustomerEmail(customerEmail != null ? customerEmail.trim() : null);
+            order.setSubtotal(subtotal);
+            order.setDiscountAmount(discountAmount);
+            order.setTotalAmount(totalAmount);
+            order.setPromoCode(promoCode != null ? promoCode.trim() : null);
+            order.setOrderType(orderType != null ? orderType : "walk_in");
+            order.setPaymentMethod(paymentMethod != null ? paymentMethod : "cash");
+            order.setNotes(notes);
+            order.setOrderItems(orderItems);
+            
+            if (cashierOrderDAO.createOrder(order)) {
+                sendSuccessResponse(response, "Order created successfully", order.getId());
+            } else {
+                sendErrorResponse(response, "Failed to create order");
+            }
             
         } catch (Exception e) {
-            System.err.println("CashierController: Error processing sale - " + e.getMessage());
-            sendErrorResponse(response, "Error processing sale");
+            System.err.println("CashierController: Error creating order - " + e.getMessage());
+            sendErrorResponse(response, "Error creating order");
         } finally {
             out.close();
         }
     }
     
     /**
-     * Handle search customer request
+     * Handle validate promo code request
      */
-    private void handleSearchCustomer(HttpServletRequest request, HttpServletResponse response) 
+    private void handleValidatePromo(HttpServletRequest request, HttpServletResponse response) 
             throws IOException {
         
         response.setContentType("application/json");
@@ -277,42 +495,206 @@ public class CashierController extends HttpServlet {
         PrintWriter out = response.getWriter();
         
         try {
-            String searchTerm = request.getParameter("searchTerm");
+            String promoCode = request.getParameter("promoCode");
+            String subtotalStr = request.getParameter("subtotal");
             
-            if (searchTerm == null || searchTerm.trim().isEmpty()) {
-                sendErrorResponse(response, "Search term is required");
+            if (promoCode == null || promoCode.trim().isEmpty()) {
+                sendErrorResponse(response, "Promo code is required");
                 return;
             }
             
-            // This would be implemented with actual search functionality
-            // For now, return dummy data
-            String jsonResponse = "{\"success\": true, \"customers\": [" +
-                "{\"id\": 1, \"name\": \"John Doe\", \"email\": \"john@example.com\", \"phone\": \"0771234567\"}" +
-                "]}";
+            BigDecimal subtotal = BigDecimal.ZERO;
+            if (subtotalStr != null) {
+                try {
+                    subtotal = new BigDecimal(subtotalStr);
+                } catch (NumberFormatException e) {
+                    sendErrorResponse(response, "Invalid subtotal amount");
+                    return;
+                }
+            }
+            
+            PromoCode promo = promoCodeDAO.getPromoCodeByCode(promoCode.trim());
+            
+            if (promo == null) {
+                sendErrorResponse(response, "Promo code not found");
+                return;
+            }
+            
+            if (!promo.isValidForOrder(subtotal)) {
+                sendErrorResponse(response, "Promo code is not valid for this order");
+                return;
+            }
+            
+            BigDecimal discountAmount = promo.calculateDiscount(subtotal);
+            
+            String jsonResponse = String.format(
+                "{\"success\": true, \"message\": \"Promo code is valid\", " +
+                "\"discountAmount\": %s, \"description\": \"%s\"}",
+                discountAmount, escapeJsonString(promo.getDescription())
+            );
             
             out.print(jsonResponse);
             
         } catch (Exception e) {
-            System.err.println("CashierController: Error searching customer - " + e.getMessage());
-            sendErrorResponse(response, "Error searching customer");
+            System.err.println("CashierController: Error validating promo - " + e.getMessage());
+            sendErrorResponse(response, "Error validating promo code");
         } finally {
             out.close();
         }
+    }
+    
+    /**
+     * Handle print order request
+     */
+    private void handlePrintOrder(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String orderIdStr = request.getParameter("orderId");
+            
+            if (orderIdStr == null || orderIdStr.trim().isEmpty()) {
+                sendErrorResponse(response, "Order ID is required");
+                return;
+            }
+            
+            int orderId = Integer.parseInt(orderIdStr);
+            
+            if (cashierOrderDAO.markAsPrinted(orderId)) {
+                sendSuccessResponse(response, "Order marked as printed");
+            } else {
+                sendErrorResponse(response, "Failed to mark order as printed");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid order ID");
+        } catch (Exception e) {
+            System.err.println("CashierController: Error printing order - " + e.getMessage());
+            sendErrorResponse(response, "Error printing order");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Handle update order status request
+     */
+    private void handleUpdateOrderStatus(HttpServletRequest request, HttpServletResponse response) 
+            throws IOException {
+        
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        PrintWriter out = response.getWriter();
+        
+        try {
+            String orderIdStr = request.getParameter("orderId");
+            String status = request.getParameter("status");
+            
+            if (orderIdStr == null || status == null) {
+                sendErrorResponse(response, "Order ID and status are required");
+                return;
+            }
+            
+            int orderId = Integer.parseInt(orderIdStr);
+            
+            if (cashierOrderDAO.updateOrderStatus(orderId, status)) {
+                sendSuccessResponse(response, "Order status updated successfully");
+            } else {
+                sendErrorResponse(response, "Failed to update order status");
+            }
+            
+        } catch (NumberFormatException e) {
+            sendErrorResponse(response, "Invalid order ID");
+        } catch (Exception e) {
+            System.err.println("CashierController: Error updating order status - " + e.getMessage());
+            sendErrorResponse(response, "Error updating order status");
+        } finally {
+            out.close();
+        }
+    }
+    
+    /**
+     * Parse order items from JSON string (simple parsing)
+     */
+    private List<CashierOrderItem> parseOrderItems(String itemsJson) {
+        List<CashierOrderItem> items = new ArrayList<>();
+        
+        try {
+            // Simple JSON parsing - expecting format: [{"itemId":1,"quantity":2,"price":100.00}]
+            itemsJson = itemsJson.trim();
+            if (itemsJson.startsWith("[") && itemsJson.endsWith("]")) {
+                itemsJson = itemsJson.substring(1, itemsJson.length() - 1);
+                
+                String[] itemStrings = itemsJson.split("\\},\\{");
+                
+                for (String itemStr : itemStrings) {
+                    itemStr = itemStr.replace("{", "").replace("}", "");
+                    String[] pairs = itemStr.split(",");
+                    
+                    CashierOrderItem item = new CashierOrderItem();
+                    
+                    for (String pair : pairs) {
+                        String[] keyValue = pair.split(":");
+                        if (keyValue.length == 2) {
+                            String key = keyValue[0].replace("\"", "").trim();
+                            String value = keyValue[1].replace("\"", "").trim();
+                            
+                            switch (key) {
+                                case "itemId":
+                                    item.setItemId(Integer.parseInt(value));
+                                    break;
+                                case "quantity":
+                                    item.setQuantity(Integer.parseInt(value));
+                                    break;
+                                case "price":
+                                    BigDecimal unitPrice = new BigDecimal(value);
+                                    item.setUnitPrice(unitPrice);
+                                    item.setTotalPrice(unitPrice.multiply(new BigDecimal(item.getQuantity())));
+                                    break;
+                            }
+                        }
+                    }
+                    
+                    if (item.getItemId() > 0 && item.getQuantity() > 0) {
+                        items.add(item);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("CashierController: Error parsing order items - " + e.getMessage());
+        }
+        
+        return items;
     }
     
     /**
      * Send success response
      */
     private void sendSuccessResponse(HttpServletResponse response, String message) throws IOException {
+        sendSuccessResponse(response, message, null);
+    }
+    
+    private void sendSuccessResponse(HttpServletResponse response, String message, Integer orderId) throws IOException {
         response.setStatus(HttpServletResponse.SC_OK);
         PrintWriter out = response.getWriter();
         
-        String jsonResponse = String.format(
-            "{\"success\": true, \"message\": \"%s\"}",
-            escapeJsonString(message)
-        );
+        StringBuilder jsonResponse = new StringBuilder();
+        jsonResponse.append("{\"success\": true, \"message\": \"")
+                   .append(escapeJsonString(message))
+                   .append("\"");
         
-        out.print(jsonResponse);
+        if (orderId != null) {
+            jsonResponse.append(", \"orderId\": ").append(orderId);
+        }
+        
+        jsonResponse.append("}");
+        
+        out.print(jsonResponse.toString());
         out.flush();
     }
     
@@ -350,7 +732,10 @@ public class CashierController extends HttpServlet {
     @Override
     public void destroy() {
         System.out.println("CashierController: Controller being destroyed");
-        userDAO = null;
+        cashierOrderDAO = null;
+        itemDAO = null;
+        orderDAO = null;
+        promoCodeDAO = null;
         super.destroy();
     }
 }
